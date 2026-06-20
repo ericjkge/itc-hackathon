@@ -358,6 +358,9 @@ async function pResetAll() {
   $("pRepersonalize").disabled = true;
   $("pChat2").innerHTML = "";
   $("pChat2").appendChild(el("div", "empty", "forge an adapter first ↑"));
+  $("pAdapterToggle").checked = true;
+  $("pAdapterLabel").textContent = "ON";
+  $("pAdapterLabel").style.color = "#2f6ae0";
   const ph2 = $("pPhase2");
   ph2.style.opacity = ".5"; ph2.style.pointerEvents = "none";
   pStepper();
@@ -511,6 +514,7 @@ async function init() {
   // demo 2
   pInitSuggest();
   await pResetAll();
+  $("pResetAll").onclick = pResetAll;
   $("pSend").onclick = () => pSendTeach($("pInput").value);
   $("pInput").addEventListener("keydown", (e) => { if (e.key === "Enter") pSendTeach($("pInput").value); });
   $("pRepersonalize").onclick = pRepersonalize;
