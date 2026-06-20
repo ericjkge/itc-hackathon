@@ -14,19 +14,27 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .memory_service import build_memory_service
 from .service import build_service
+from .skills_service_formatting import build_skills_formatting_service
+from .skills_service_physics import build_skills_physics_service
+from .skills_service_router import build_skills_router_service
 
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="AgentHN")
 service = build_service()
 memory_service = build_memory_service()
+SKILLS_SERVICES = {
+    "physics": build_skills_physics_service(),
+    "formatting": build_skills_formatting_service(),
+}
+skills_router_service = build_skills_router_service()
 
 
 class ObserveBody(BaseModel):
@@ -46,6 +54,23 @@ class ChatBody(BaseModel):
 
 class ResetBody(BaseModel):
     uid: str = "demo"
+
+
+class SkillsConverseBody(BaseModel):
+    message: str
+
+
+class SkillsClassifyBody(BaseModel):
+    message: str
+
+
+class SkillsInternalizeBody(BaseModel):
+    skill: str
+
+
+class SkillsConverseAgainBody(BaseModel):
+    message: str
+    skill: str
 
 
 @app.get("/api/health")
@@ -90,6 +115,60 @@ def memory_run(scenario: str = "apollo_migration", size: str = "medium") -> Stre
 
     def gen():
         for frame in memory_service.run(scenario, size):
+            yield f"data: {json.dumps(frame)}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/skills/converse")
+def skills_converse(body: SkillsConverseBody) -> dict:
+    return skills_router_service.converse(body.message)
+
+
+@app.post("/api/skills/classify")
+def skills_classify(body: SkillsClassifyBody) -> dict:
+    return skills_router_service.classify(body.message)
+
+
+@app.post("/api/skills/internalize")
+def skills_internalize(body: SkillsInternalizeBody) -> dict:
+    try:
+        return skills_router_service.internalize(body.skill)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/skills/converse-again")
+def skills_converse_again(body: SkillsConverseAgainBody) -> dict:
+    try:
+        return skills_router_service.converse_again(body.message, body.skill)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+def _skills_service(name: str):
+    try:
+        return SKILLS_SERVICES[name]
+    except KeyError:
+        raise HTTPException(404, f"unknown skill {name!r}; have {list(SKILLS_SERVICES)}")
+
+
+@app.get("/api/skills/{name}/meta")
+def skills_meta(name: str) -> dict:
+    return _skills_service(name).meta()
+
+
+@app.get("/api/skills/{name}/run")
+def skills_run(name: str) -> StreamingResponse:
+    """Server-Sent Events stream of the live skill-acquisition run for `name`."""
+    svc = _skills_service(name)
+
+    def gen():
+        for frame in svc.run():
             yield f"data: {json.dumps(frame)}\n\n"
 
     return StreamingResponse(

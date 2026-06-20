@@ -1,0 +1,9 @@
+#!/bin/sh
+# Stub nvcc: satisfies deepspeed's torch/nvcc version-match probe at import
+# time. No real CUDA toolkit is installed on this box; nothing in the
+# personalization webapp path actually compiles CUDA ops.
+echo "nvcc: NVIDIA (R) Cuda compiler driver"
+echo "Copyright (c) 2005-2024 NVIDIA Corporation"
+echo "Built on stub"
+echo "Cuda compilation tools, release 12.4, V12.4.131"
+echo "Build cuda_12.4.r12.4/compiler.34097967_0"

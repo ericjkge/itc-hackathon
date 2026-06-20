@@ -50,7 +50,7 @@
       </div>
       <div class="card" style="padding:26px 24px">
         <h3 style="font-size:19px;font-weight:600;margin:0 0 10px;letter-spacing:-0.01em">Self-improving skills</h3>
-        <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:0">On failure, the agent reflects on its mistakes and writes a sharper task prompt. Text-to-LoRA converts it into a task adapter, specializing the agent's weights without traditional post-training.</p>
+        <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:0">A reference doc for a skill (formulas, output-format conventions) is internalized once into a LoRA adapter. The agent recalls it straight from the weights afterward, instead of re-paying the doc's context cost on every query.</p>
       </div>
     </div>
   </section>
@@ -61,19 +61,19 @@
     <p style="font-size:18px;line-height:1.72;color:#3a3832;margin:0 0 18px;max-width:64ch">SFT and RL adapt a model with long training loops. A hypernetwork instead <em>predicts</em> the adapter weights directly from an input, so adaptation happens in real time, mid-conversation.</p>
     <div style="border:1px solid #eceae3;border-radius:12px;background:#faf9f6;padding:24px;margin:26px 0">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:16px">
-        <span class="eyebrow">Doc-to-LoRA (D2L) · memory &amp; personalization</span>
+        <span class="eyebrow">Doc-to-LoRA (D2L) · memory, personalization &amp; skills</span>
         <a href="https://arxiv.org/abs/2602.15902" target="_blank" rel="noopener" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#2f6ae0;text-decoration:none">Sakana AI · arXiv:2602.15902 ↗</a>
       </div>
       <div class="pipeline">
-        <span class="pill">oldest turns / prefs</span><span class="arr">→</span>
+        <span class="pill">oldest turns / prefs / skill doc</span><span class="arr">→</span>
         <span class="pill hot">D2L hypernetwork</span><span class="arr">→</span>
         <span class="pill">adapter&nbsp;r=8</span><span class="arr">⊕</span>
-        <span class="pill">memory adapter</span><span class="arr">→</span>
-        <span class="pill">evict from context</span>
+        <span class="pill">running adapter</span><span class="arr">→</span>
+        <span class="pill">evict doc from context</span>
       </div>
       <div style="height:1px;background:#e7e4dd;margin:22px 0"></div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;justify-content:space-between;margin-bottom:16px">
-        <span class="eyebrow">Text-to-LoRA (T2L) · skills</span>
+        <span class="eyebrow" style="color:#c79a3a">Roadmap — Text-to-LoRA (T2L) · self-reflective skills</span>
         <a href="https://arxiv.org/abs/2506.06105" target="_blank" rel="noopener" style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#2f6ae0;text-decoration:none">Sakana AI · arXiv:2506.06105 ↗</a>
       </div>
       <div class="pipeline">
@@ -90,7 +90,7 @@
   <section id="demos" style="max-width:1080px;margin:0 auto;padding:56px 24px 0">
     <div>
       <h2 style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0 0 12px">See the weights change in real time</h2>
-      <p style="font-size:17px;line-height:1.6;color:#5c594f;margin:0;max-width:62ch">Three scenarios. <strong>Memory and personalization are live</strong> — wired to the Doc-to-LoRA hook on gemma-2-2b-it. Skills is a scripted preview of the same UI.</p>
+      <p style="font-size:17px;line-height:1.6;color:#5c594f;margin:0;max-width:62ch">Three scenarios, <strong>all live</strong> — wired to the Doc-to-LoRA hook on gemma-2-2b-it.</p>
     </div>
     <div id="demoTabs" class="tabrow" style="margin-top:28px"></div>
   </section>
@@ -257,34 +257,55 @@
     </div>
   </section>
 
-  <!-- ===== DEMO 3 : SKILLS (scripted) ===== -->
+  <!-- ===== DEMO 3 : SKILLS (live) ===== -->
   <section id="demo-2" style="max-width:1080px;margin:0 auto;padding:16px 24px 0;display:none">
-    <h3 class="demo-title">Self-improving skills — fail, reflect, internalize, succeed <span class="badge-script">scripted preview</span></h3>
+    <h3 class="demo-title">Self-improving skills — converse, document, internalize, converse again <span class="badge-live">live</span></h3>
+    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-6px 0 18px;max-width:72ch">Ask a physics word problem or a structured-output request cold. Classify it to surface the matching reference doc — a physics formula sheet or a format guide — internalize that doc into a D2L LoRA adapter, then ask the <strong>exact same question again</strong>: same bare prompt, new weights.</p>
+
+    <!-- stepper -->
+    <div class="panel" style="margin-bottom:18px">
+      <div id="rcStepper" class="stepper"></div>
+    </div>
+
+    <!-- PHASE 1: converse -> document -> internalize -->
     <div class="panel">
       <div class="controlbar">
-        <div id="d3Tabs" style="display:flex;gap:7px"></div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="d3Next" class="btn-primary">Attempt ▸</button>
-          <button id="d3Reset" class="btn-ghost">Reset</button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="dot" style="background:#2f6ae0"></span>
+          <span style="font-size:14px;font-weight:600">1 · Converse <span style="font-weight:400;color:#9a9890">— ask the base model directly</span></span>
         </div>
+        <button id="rcReset" class="btn-ghost">Reset demo</button>
       </div>
-      <div id="d3Steps" class="stepper" style="border-bottom:1px solid #eceae3"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr" class="grid-2">
-        <div style="border-right:1px solid #eceae3;padding:22px 24px">
-          <div class="eyebrow" style="margin-bottom:12px"><span id="d3Bench"></span> · prompt</div>
-          <p id="d3Question" style="font-size:16px;line-height:1.6;color:#26241f;margin:0 0 18px"></p>
-          <div id="d3Choices" style="display:flex;flex-direction:column;gap:9px"></div>
+      <div id="rcChat" class="feed" style="height:220px"></div>
+      <div class="inputrow">
+        <input id="rcInput" type="text" placeholder="Ask a physics word problem, or ask for JSON/YAML/proto/bullets…" autocomplete="off">
+        <button id="rcSend" class="btn-primary">Send</button>
+      </div>
+
+      <div class="colhead" style="border-top:1px solid #eceae3">
+        <span class="eyebrow">2 · Document — classify the question, surface its reference doc</span>
+        <button id="rcClassifyBtn" class="btn-primary" disabled>Classify →</button>
+      </div>
+      <div id="rcClassifyStatus" style="display:none;padding:0 18px 13px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#1a3f9e"></div>
+      <pre id="rcDoc" style="display:none;margin:0 18px 16px;padding:14px 16px;border:1px solid #eceae3;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12px;line-height:1.6;color:#3a3832;white-space:pre-wrap;max-height:240px;overflow-y:auto;background:#fbfaf7"></pre>
+
+      <div class="colhead" style="border-top:1px solid #eceae3">
+        <span class="eyebrow">3 · Internalize — forge a LoRA adapter from the doc above</span>
+        <button id="rcInternalizeBtn" class="btn-primary" disabled>↯ Internalize → forge LoRA adapter</button>
+      </div>
+      <div id="rcAdapterStatus" class="adapter-status" style="display:none;margin:0 18px 16px"></div>
+    </div>
+
+    <!-- PHASE 2: converse again, gated until the adapter is ready -->
+    <div id="rcPhase2" class="panel" style="margin-top:18px;opacity:.5;pointer-events:none">
+      <div class="controlbar">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="dot" style="background:#3f9d72"></span>
+          <span style="font-size:14px;font-weight:600">4 · Converse again <span style="font-weight:400;color:#9a9890">— the same question, adapter restored</span></span>
         </div>
-        <div id="d3Right" style="padding:22px 24px;background:#fcfbf9"></div>
+        <button id="rcAskAgainBtn" class="btn-primary">Ask again →</button>
       </div>
-      <div id="d3Compare" style="border-top:1px solid #eceae3;padding:16px 20px;background:#faf9f6;display:none;align-items:center;gap:16px">
-        <span class="eyebrow">Compare</span>
-        <div style="display:inline-flex;background:#efece6;border-radius:8px;padding:3px">
-          <button id="d3Before" class="seg">Before · vanilla</button>
-          <button id="d3After" class="seg seg-on">After · T2L adapter</button>
-        </div>
-        <span id="d3CompareNote" style="font-size:14px;color:#8a877f"></span>
-      </div>
+      <div id="rcChat2" class="feed" style="height:240px"></div>
     </div>
   </section>
 

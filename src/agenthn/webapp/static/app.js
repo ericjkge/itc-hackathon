@@ -475,123 +475,173 @@ function pInitSuggest() {
   });
 }
 
-/* ============================ DEMO 3: SKILLS (scripted) ============================ */
-const D3 = {
-  item: 0, phase: 0, view: "after",
-  data: [
-    {
-      bench: "HellaSwag",
-      question: "A woman is outside with a bucket and a dog. The dog is trying to avoid a bath. She…",
-      choices: ["…rinses the bucket with soap and blow-dries the dog's head.", "…uses a hose to keep the dog away from the bucket.", "…gets the dog wet, and it runs off again before she finishes.", "…climbs into the bathtub with the dog."],
-      vanillaPick: 0, correct: 2,
-      reflection: "I keep choosing the ending with the most familiar words. This is physical-continuation reasoning — I should simulate the literal next event that follows from the actions, not match surface vocabulary.",
-      prompt: "You are solving a physical commonsense continuation. Ignore lexical overlap. For each ending, simulate the literal next physical event and choose the most plausible continuation.",
-    },
-    {
-      bench: "PIQA",
-      question: "To keep sliced apple from browning before lunch, you should…",
-      choices: ["…rub the slices with lemon juice.", "…store them in a warm, sunny spot.", "…wrap them loosely in foil only.", "…leave them open to the air."],
-      vanillaPick: 3, correct: 0,
-      reflection: "I defaulted to the lowest-effort action. This is physical-goal reasoning about oxidation — I should pick the action whose mechanism actually prevents browning (acid slows enzymatic oxidation).",
-      prompt: "You are solving a physical-goal task. Identify the mechanism the goal depends on, then select the action whose mechanism achieves it.",
-    },
-  ],
+/* ============================ DEMO 3: SKILLS (converse / document / internalize / converse again) ============================ */
+const RC_SKILL_META = {
+  physics: { color: "#2f6ae0", label: "Physics" },
+  formatting: { color: "#9a5cc7", label: "Formatting" },
 };
-function d3RenderTabs() {
-  const row = $("d3Tabs");
-  row.innerHTML = "";
-  D3.data.forEach((d, i) => {
-    const b = el("button", "btn-sm" + (i === D3.item ? " on" : ""), d.bench);
-    b.onclick = () => { D3.item = i; D3.phase = 0; D3.view = "after"; d3Render(); };
-    row.appendChild(b);
-  });
-}
-function d3Render() {
-  const it = D3.data[D3.item];
-  const phase = D3.phase, solved = phase >= 3;
-  d3RenderTabs();
-  $("d3Bench").textContent = it.bench;
-  $("d3Question").textContent = it.question;
-  // stepper
-  const labels = ["Attempt", "Reflect", "Internalize", "Succeed"];
-  const steps = $("d3Steps");
-  steps.innerHTML = "";
+const RC = { phase: 0, busy: false, lastMessage: "", lastBaseReply: "", lastSkill: null };
+
+function rcStepper() {
+  const labels = ["Converse", "Document", "Internalize", "Converse again"];
+  const box = $("rcStepper");
+  box.innerHTML = "";
+  const last = labels.length - 1;
   labels.forEach((label, idx) => {
-    const reached = phase >= idx + 1;
-    const isLast = idx === labels.length - 1;
-    const s = el("div", "step" + (reached ? (isLast && solved ? " done" : " on") : ""));
+    const reached = RC.phase >= idx;
+    const s = el("div", "step" + (reached ? (idx === last && RC.phase >= last ? " done" : " on") : ""));
     s.appendChild(el("span", "sn", String(idx + 1)));
     s.appendChild(el("span", "sl", label));
-    if (!isLast) s.appendChild(el("span", "bar"));
-    steps.appendChild(s);
+    if (idx < last) s.appendChild(el("span", "bar"));
+    box.appendChild(s);
   });
-  // choices
-  let highlight = -1, wrong = false, right = false;
-  if (phase >= 1 && phase < 3) { highlight = it.vanillaPick; wrong = true; }
-  else if (solved) {
-    if (D3.view === "before") { highlight = it.vanillaPick; wrong = true; }
-    else { highlight = it.correct; right = true; }
+}
+
+function rcAddMsg(feedId, role, text, typing) {
+  const feed = $(feedId);
+  const empty = feed.querySelector(".empty");
+  if (empty) empty.remove();
+  const m = el("div", "msg " + role + (typing ? " typing" : ""), text);
+  feed.appendChild(m);
+  feed.scrollTop = feed.scrollHeight;
+  return m;
+}
+
+function rcTag(text, color) {
+  const tag = el("div", "", text);
+  tag.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:" + (color || "#9a9890") + ";margin-top:5px";
+  return tag;
+}
+
+async function rcSend(text) {
+  if (RC.busy || !text.trim()) return;
+  RC.busy = true;
+  $("rcInput").value = "";
+  rcAddMsg("rcChat", "user", text);
+  const typing = rcAddMsg("rcChat", "bot", "…", true);
+  try {
+    const r = await api("/api/skills/converse", { message: text });
+    typing.classList.remove("typing");
+    typing.textContent = r.reply;
+    typing.appendChild(rcTag(`↳ base model · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`));
+    RC.lastMessage = text;
+    RC.lastBaseReply = r.reply;
+    $("rcClassifyBtn").disabled = false;
+  } catch (err) {
+    typing.classList.remove("typing");
+    typing.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
   }
-  const choices = $("d3Choices");
-  choices.innerHTML = "";
-  it.choices.forEach((text, idx) => {
-    let cls = "choice", mk = String.fromCharCode(65 + idx);
-    if (idx === highlight && wrong) { cls += " wrong"; mk = "✗"; }
-    else if (idx === highlight && right) { cls += " right"; mk = "✓"; }
-    const c = el("div", cls);
-    c.appendChild(el("span", "mk", mk));
-    c.appendChild(el("span", "", text));
-    c.querySelector("span:last-child").style.flex = "1";
-    choices.appendChild(c);
-  });
-  // right panel
-  const R = $("d3Right");
-  R.innerHTML = "";
-  if (phase === 0) {
-    R.appendChild(el("div", "empty", "The agent will attempt the task, then improve itself. Press Attempt ▸"));
-    R.firstChild.style.minHeight = "160px";
-  } else {
-    if (phase >= 2) {
-      const rf = el("div", "", "");
-      rf.style.marginBottom = "18px";
-      rf.appendChild(el("div", "eyebrow", "Agent self-reflection")).style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2f6ae0;margin-bottom:10px";
-      const p = el("p", "", it.reflection);
-      p.style.cssText = "font-family:'IBM Plex Serif',Georgia,serif;font-style:italic;font-size:15px;line-height:1.62;color:#3a3832;margin:0";
-      rf.appendChild(p);
-      R.appendChild(rf);
-      const pw = el("div", "");
-      pw.style.marginBottom = "18px";
-      const lbl = el("div", "eyebrow", "Self-written task prompt");
-      lbl.style.marginBottom = "10px";
-      pw.appendChild(lbl);
-      const code = el("div", "", it.prompt);
-      code.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.6;color:#26241f;background:#fff;border:1px solid #eceae3;border-radius:8px;padding:14px 15px";
-      pw.appendChild(code);
-      R.appendChild(pw);
-    }
-    if (phase >= 3) {
-      const ad = el("div", "");
-      ad.style.cssText = "display:flex;align-items:center;gap:11px;font-family:'IBM Plex Mono',monospace;font-size:13px;background:#ebf2fe;border:1px solid #cdddfb;border-radius:8px;padding:13px 15px;color:#1e50c0;animation:fadeUp .4s ease both";
-      ad.innerHTML = `<span style="font-size:16px">↯</span><span>Text-to-LoRA → <strong>${it.bench}-skill.lora</strong> · r=8 · composed into weights</span>`;
-      R.appendChild(ad);
-    }
-    const res = el("div", "");
-    res.style.cssText = `margin-top:18px;display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;color:${phase >= 3 ? "#2f7d57" : "#b04a42"}`;
-    res.innerHTML = `<span style="font-size:18px">${phase >= 3 ? "✓" : "✗"}</span>${phase >= 3 ? "Correct — skill internalized as a LoRA adapter." : "Incorrect — anchored on surface features."}`;
-    R.appendChild(res);
+}
+
+async function rcClassify() {
+  if (RC.busy || !RC.lastMessage) return;
+  RC.busy = true;
+  $("rcClassifyBtn").disabled = true;
+  const status = $("rcClassifyStatus");
+  status.style.display = "";
+  status.textContent = "classifying…";
+  try {
+    const r = await api("/api/skills/classify", { message: RC.lastMessage });
+    const meta = RC_SKILL_META[r.skill] || { color: "#9a9890" };
+    status.innerHTML =
+      '<span class="dot" style="background:' + meta.color + ';width:7px;height:7px;display:inline-block;margin-right:6px"></span>routed → ' +
+      r.label + " adapter · classified in " + r.classify_ms + "ms";
+    const docBox = $("rcDoc");
+    docBox.textContent = r.doc;
+    docBox.style.display = "";
+    RC.lastSkill = r.skill;
+    RC.phase = Math.max(RC.phase, 1);
+    rcStepper();
+    $("rcInternalizeBtn").disabled = false;
+  } catch (err) {
+    status.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+    $("rcClassifyBtn").disabled = false;
   }
-  // next button
-  const nb = $("d3Next");
-  nb.textContent = phase === 0 ? "Attempt ▸" : phase === 1 ? "Self-reflect ▸" : phase === 2 ? "Internalize (T2L) ▸" : "Solved ✓";
-  nb.disabled = solved;
-  // compare
-  const cmp = $("d3Compare");
-  cmp.style.display = solved ? "flex" : "none";
-  $("d3Before").className = "seg" + (D3.view === "before" ? " seg-on" : "");
-  $("d3After").className = "seg" + (D3.view === "after" ? " seg-on" : "");
-  $("d3Before").style.color = D3.view === "before" ? "#b04a42" : "#8a877f";
-  $("d3After").style.color = D3.view === "after" ? "#2f7d57" : "#8a877f";
-  $("d3CompareNote").textContent = D3.view === "before" ? "Vanilla agent picked the wrong continuation." : "With the T2L adapter, the agent answers correctly.";
+}
+
+async function rcInternalize() {
+  if (RC.busy || !RC.lastSkill) return;
+  RC.busy = true;
+  $("rcInternalizeBtn").disabled = true;
+  const status = $("rcAdapterStatus");
+  status.style.display = "";
+  status.style.background = "#ebf2fe";
+  status.style.borderColor = "#cdddfb";
+  status.style.color = "#1e50c0";
+  status.innerHTML = "";
+  status.appendChild(el("span", "spinner"));
+  status.appendChild(el("span", "", `internalizing ${RC.lastSkill} doc → forging LoRA…`));
+  try {
+    const r = await api("/api/skills/internalize", { skill: RC.lastSkill });
+    status.style.background = "#eef6f0";
+    status.style.borderColor = "#b5ddc6";
+    status.style.color = "#2f7d57";
+    status.innerHTML = `<span style="font-size:15px">↯</span><span><strong>${r.skill}.lora</strong> · ${r.cached ? "already cached" : r.elapsed + "s to forge"}</span>`;
+    RC.phase = 2;
+    rcStepper();
+    const ph2 = $("rcPhase2");
+    ph2.style.opacity = "1";
+    ph2.style.pointerEvents = "auto";
+    $("rcChat2").innerHTML = "";
+    $("rcChat2").appendChild(el("div", "empty", "ask again to see the adapter answer ↑"));
+  } catch (err) {
+    status.style.background = "#fbeaea";
+    status.style.borderColor = "#e8b8b2";
+    status.style.color = "#b04a42";
+    status.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+    $("rcInternalizeBtn").disabled = false;
+  }
+}
+
+async function rcAskAgain() {
+  if (RC.busy || RC.phase < 2) return;
+  RC.busy = true;
+  $("rcChat2").innerHTML = "";
+  rcAddMsg("rcChat2", "user", RC.lastMessage);
+  const before = rcAddMsg("rcChat2", "bot", RC.lastBaseReply);
+  before.appendChild(rcTag("↳ before · base model"));
+  const typing = rcAddMsg("rcChat2", "bot", "…", true);
+  try {
+    const r = await api("/api/skills/converse-again", { message: RC.lastMessage, skill: RC.lastSkill });
+    typing.classList.remove("typing");
+    typing.textContent = r.reply;
+    typing.appendChild(rcTag(`↳ after · ${RC.lastSkill} adapter restored · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`, "#2f6ae0"));
+    RC.phase = 3;
+    rcStepper();
+  } catch (err) {
+    typing.classList.remove("typing");
+    typing.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+  }
+}
+
+function rcReset() {
+  RC.phase = 0;
+  RC.busy = false;
+  RC.lastMessage = "";
+  RC.lastBaseReply = "";
+  RC.lastSkill = null;
+  $("rcChat").innerHTML = "";
+  rcAddMsg("rcChat", "bot", "Hi — ask me a physics word problem, or ask for structured output (JSON / YAML / protobuf / bullets). I'll answer cold first; then we'll classify, internalize, and ask again.");
+  $("rcClassifyBtn").disabled = true;
+  $("rcClassifyStatus").style.display = "none";
+  $("rcDoc").style.display = "none";
+  $("rcDoc").textContent = "";
+  $("rcInternalizeBtn").disabled = true;
+  $("rcAdapterStatus").style.display = "none";
+  const ph2 = $("rcPhase2");
+  ph2.style.opacity = ".5";
+  ph2.style.pointerEvents = "none";
+  $("rcChat2").innerHTML = "";
+  $("rcChat2").appendChild(el("div", "empty", "internalize an adapter first ↑"));
+  rcStepper();
 }
 
 /* ============================ INIT ============================ */
@@ -618,12 +668,14 @@ async function init() {
     $("pAdapterLabel").style.color = on ? "#2f6ae0" : "#9a9890";
   });
 
-  // demo 3
-  $("d3Next").onclick = () => { D3.phase = Math.min(D3.phase + 1, 3); d3Render(); };
-  $("d3Reset").onclick = () => { D3.phase = 0; D3.view = "after"; d3Render(); };
-  $("d3Before").onclick = () => { D3.view = "before"; d3Render(); };
-  $("d3After").onclick = () => { D3.view = "after"; d3Render(); };
-  d3Render();
+  // demo 3 (converse / document / internalize / converse again)
+  rcReset();
+  $("rcSend").onclick = () => rcSend($("rcInput").value);
+  $("rcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") rcSend($("rcInput").value); });
+  $("rcReset").onclick = () => { if (!RC.busy) rcReset(); };
+  $("rcClassifyBtn").onclick = rcClassify;
+  $("rcInternalizeBtn").onclick = rcInternalize;
+  $("rcAskAgainBtn").onclick = rcAskAgain;
 
   // health badge
   try {

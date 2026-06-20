@@ -40,3 +40,20 @@ MAKE SURE QWEN-4B GREEDY TURNED ON (do_sample=False)
     ),
     expected=1500 * (25 / 5),
     formula="a = (v-v0)/t, F = m*a",
+
+6. 
+    question="A 1800 kg car accelerates from rest to 18 m/s in 6 seconds. What net force acted on the car?",
+    expected=5400.0,
+    formula="a = (v-v0)/t, F = m*a",
+
+
+7.
+    question="A 900 kg car traveling at 20 m/s skids to a stop on a horizontal road with a coefficient of friction of 0.5. What is the magnitude of the deceleration caused by friction?",
+    expected=4.9,
+    formula="F_friction = mu*m*g, a = F/m (mass cancels)",
+
+8. 
+
+    question="A 1400 kg car accelerates from 5 m/s to 25 m/s in 5 seconds. What net force acted on the car?",
+    expected=5600.0,
+    formula="a = (v-v0)/t, F = m*a",
