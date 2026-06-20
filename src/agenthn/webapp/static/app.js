@@ -21,7 +21,8 @@ const api = async (path, body) => {
 const DEMO_META = [
   { num: "01", label: "Long-horizon memory" },
   { num: "02", label: "Personalization" },
-  { num: "03", label: "Self-improving skills" },
+  { num: "03", label: "Iterative Recall" },
+  { num: "04", label: "Self-improving skills" },
 ];
 let activeDemo = 0; // open on the live long-horizon memory demo
 
@@ -34,7 +35,7 @@ function renderTabs() {
     b.onclick = () => {
       activeDemo = i;
       renderTabs();
-      [0, 1, 2].forEach((j) => ($(`demo-${j}`).style.display = j === i ? "" : "none"));
+      DEMO_META.forEach((_, j) => ($(`demo-${j}`).style.display = j === i ? "" : "none"));
     };
     row.appendChild(b);
   });
@@ -656,10 +657,179 @@ function skReset(soft) {
   if (!soft) $("skStatus").textContent = "— press run to start";
 }
 
+/* ============================ DEMO 4: SKILLS (converse / document / internalize / converse again) ============================ */
+const RC_SKILL_META = {
+  physics: { color: "#2f6ae0", label: "Physics" },
+  formatting: { color: "#9a5cc7", label: "Formatting" },
+};
+const RC = { phase: 0, busy: false, lastMessage: "", lastBaseReply: "", lastSkill: null };
+
+function rcStepper() {
+  const labels = ["Converse", "Document", "Internalize", "Converse again"];
+  const box = $("rcStepper");
+  box.innerHTML = "";
+  const last = labels.length - 1;
+  labels.forEach((label, idx) => {
+    const reached = RC.phase >= idx;
+    const s = el("div", "step" + (reached ? (idx === last && RC.phase >= last ? " done" : " on") : ""));
+    s.appendChild(el("span", "sn", String(idx + 1)));
+    s.appendChild(el("span", "sl", label));
+    if (idx < last) s.appendChild(el("span", "bar"));
+    box.appendChild(s);
+  });
+}
+
+function rcAddMsg(feedId, role, text, typing) {
+  const feed = $(feedId);
+  const empty = feed.querySelector(".empty");
+  if (empty) empty.remove();
+  const m = el("div", "msg " + role + (typing ? " typing" : ""), text);
+  feed.appendChild(m);
+  feed.scrollTop = feed.scrollHeight;
+  return m;
+}
+
+function rcTag(text, color) {
+  const tag = el("div", "", text);
+  tag.style.cssText = "font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:" + (color || "#9a9890") + ";margin-top:5px";
+  return tag;
+}
+
+async function rcSend(text) {
+  if (RC.busy || !text.trim()) return;
+  RC.busy = true;
+  $("rcInput").value = "";
+  rcAddMsg("rcChat", "user", text);
+  const typing = rcAddMsg("rcChat", "bot", "…", true);
+  try {
+    const r = await api("/api/skills/converse", { message: text });
+    typing.classList.remove("typing");
+    typing.textContent = r.reply;
+    typing.appendChild(rcTag(`↳ base model · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`));
+    RC.lastMessage = text;
+    RC.lastBaseReply = r.reply;
+    $("rcClassifyBtn").disabled = false;
+  } catch (err) {
+    typing.classList.remove("typing");
+    typing.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+  }
+}
+
+async function rcClassify() {
+  if (RC.busy || !RC.lastMessage) return;
+  RC.busy = true;
+  $("rcClassifyBtn").disabled = true;
+  const status = $("rcClassifyStatus");
+  status.style.display = "";
+  status.textContent = "classifying…";
+  try {
+    const r = await api("/api/skills/classify", { message: RC.lastMessage });
+    const meta = RC_SKILL_META[r.skill] || { color: "#9a9890" };
+    status.innerHTML =
+      '<span class="dot" style="background:' + meta.color + ';width:7px;height:7px;display:inline-block;margin-right:6px"></span>routed → ' +
+      r.label + " adapter · classified in " + r.classify_ms + "ms";
+    const docBox = $("rcDoc");
+    docBox.textContent = r.doc;
+    docBox.style.display = "";
+    RC.lastSkill = r.skill;
+    RC.phase = Math.max(RC.phase, 1);
+    rcStepper();
+    $("rcInternalizeBtn").disabled = false;
+  } catch (err) {
+    status.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+    $("rcClassifyBtn").disabled = false;
+  }
+}
+
+async function rcInternalize() {
+  if (RC.busy || !RC.lastSkill) return;
+  RC.busy = true;
+  $("rcInternalizeBtn").disabled = true;
+  const status = $("rcAdapterStatus");
+  status.style.display = "";
+  status.style.background = "#ebf2fe";
+  status.style.borderColor = "#cdddfb";
+  status.style.color = "#1e50c0";
+  status.innerHTML = "";
+  status.appendChild(el("span", "spinner"));
+  status.appendChild(el("span", "", `internalizing ${RC.lastSkill} doc → forging LoRA…`));
+  try {
+    const r = await api("/api/skills/internalize", { skill: RC.lastSkill });
+    status.style.background = "#eef6f0";
+    status.style.borderColor = "#b5ddc6";
+    status.style.color = "#2f7d57";
+    status.innerHTML = `<span style="font-size:15px">↯</span><span><strong>${r.skill}.lora</strong> · ${r.cached ? "already cached" : r.elapsed + "s to forge"}</span>`;
+    RC.phase = 2;
+    rcStepper();
+    const ph2 = $("rcPhase2");
+    ph2.style.opacity = "1";
+    ph2.style.pointerEvents = "auto";
+    $("rcChat2").innerHTML = "";
+    $("rcChat2").appendChild(el("div", "empty", "ask again to see the adapter answer ↑"));
+  } catch (err) {
+    status.style.background = "#fbeaea";
+    status.style.borderColor = "#e8b8b2";
+    status.style.color = "#b04a42";
+    status.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+    $("rcInternalizeBtn").disabled = false;
+  }
+}
+
+async function rcAskAgain() {
+  if (RC.busy || RC.phase < 2) return;
+  RC.busy = true;
+  $("rcChat2").innerHTML = "";
+  rcAddMsg("rcChat2", "user", RC.lastMessage);
+  const before = rcAddMsg("rcChat2", "bot", RC.lastBaseReply);
+  before.appendChild(rcTag("↳ before · base model"));
+  const typing = rcAddMsg("rcChat2", "bot", "…", true);
+  try {
+    const r = await api("/api/skills/converse-again", { message: RC.lastMessage, skill: RC.lastSkill });
+    typing.classList.remove("typing");
+    typing.textContent = r.reply;
+    typing.appendChild(rcTag(`↳ after · ${RC.lastSkill} adapter restored · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`, "#2f6ae0"));
+    RC.phase = 3;
+    rcStepper();
+  } catch (err) {
+    typing.classList.remove("typing");
+    typing.textContent = "[error: " + err.message + "]";
+  } finally {
+    RC.busy = false;
+  }
+}
+
+function rcReset() {
+  RC.phase = 0;
+  RC.busy = false;
+  RC.lastMessage = "";
+  RC.lastBaseReply = "";
+  RC.lastSkill = null;
+  $("rcChat").innerHTML = "";
+  rcAddMsg("rcChat", "bot", "Hi — ask me a physics word problem, or ask for structured output (JSON / YAML / protobuf / bullets). I'll answer cold first; then we'll classify, internalize, and ask again.");
+  $("rcClassifyBtn").disabled = true;
+  $("rcClassifyStatus").style.display = "none";
+  $("rcDoc").style.display = "none";
+  $("rcDoc").textContent = "";
+  $("rcInternalizeBtn").disabled = true;
+  $("rcAdapterStatus").style.display = "none";
+  const ph2 = $("rcPhase2");
+  ph2.style.opacity = ".5";
+  ph2.style.pointerEvents = "none";
+  $("rcChat2").innerHTML = "";
+  $("rcChat2").appendChild(el("div", "empty", "internalize an adapter first ↑"));
+  rcStepper();
+}
+
 /* ============================ INIT ============================ */
 async function init() {
   renderTabs();
-  [0, 1, 2].forEach((j) => ($(`demo-${j}`).style.display = j === activeDemo ? "" : "none"));
+  DEMO_META.forEach((_, j) => ($(`demo-${j}`).style.display = j === activeDemo ? "" : "none"));
 
   // demo 1 (live memory)
   await m1Init();
@@ -680,10 +850,19 @@ async function init() {
     $("pAdapterLabel").style.color = on ? "#2f6ae0" : "#9a9890";
   });
 
-  // demo 3 (self-improving skills — self-refine rounds, SSE)
+  // demo 3 (Iterative Recall — self-refine rounds, SSE)
   skReset();
   $("skRun").onclick = skRun;
   $("skReset").onclick = () => { if (!SK.running) skReset(); };
+
+  // demo 4 (self-improving skills — converse / document / internalize / converse again)
+  rcReset();
+  $("rcSend").onclick = () => rcSend($("rcInput").value);
+  $("rcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") rcSend($("rcInput").value); });
+  $("rcReset").onclick = () => { if (!RC.busy) rcReset(); };
+  $("rcClassifyBtn").onclick = rcClassify;
+  $("rcInternalizeBtn").onclick = rcInternalize;
+  $("rcAskAgainBtn").onclick = rcAskAgain;
 
   // health badge
   try {
