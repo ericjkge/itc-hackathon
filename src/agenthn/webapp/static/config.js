@@ -3,7 +3,7 @@
  * `backend`: base URL of the LIVE FastAPI server (the GPU box behind an
  *   ngrok / cloudflared https tunnel), e.g. "https://abc123.ngrok-free.app".
  *   Leave "" when the page is served by the FastAPI app itself (same origin).
- *   scripts/capture_fixtures.sh rewrites this line when $AGENTHN_BACKEND is set.
+ *   scripts/run_demo_server.sh rewrites this line while the GPU server is up.
  *
  * Fallback: the site pings `${backend}/api/health` on load and before every
  *   demo action. If that fails — or the hard `cutoff` below has passed — the
