@@ -21,4 +21,4 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"agenthn.webapp" = ["static/*"]
+"agenthn.webapp" = ["static/*", "static/fixtures/*"]

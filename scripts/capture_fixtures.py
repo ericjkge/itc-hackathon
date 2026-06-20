@@ -114,6 +114,17 @@ def capture_memory() -> None:
             print(f"  {len(frames)} frames in {time.time() - t:.0f}s")
             write(name, frames)
 
+    # The browser uses this inventory to disable sizes that have not actually
+    # been recorded. Re-running with CAPTURE_SIZES=large enables Large only
+    # after every corresponding file has been written successfully.
+    recordings = []
+    for scenario in scenarios:
+        for size in meta.get("sizes", []):
+            if (OUT / f"memory_{scenario}_{size}.json").is_file():
+                recordings.append(f"{scenario}:{size}")
+    meta["recordings"] = recordings
+    write("memory_meta.json", meta)
+
 
 def capture_personalization() -> None:
     print("[personalization] reset + teach")

@@ -58,6 +58,8 @@ a{color:inherit}
 .suggestrow{display:flex;gap:7px;flex-wrap:wrap;padding:11px 16px 4px}
 .chip-btn{font-family:'IBM Plex Sans';font-size:12px;cursor:pointer;padding:5px 11px;border-radius:99px;border:1px dashed #cdddfb;background:#f5f9ff;color:#2f6ae0}
 .chip-btn:hover{background:#ebf2fe}
+.chip-btn:disabled{opacity:.55;cursor:default}
+.recorded-note{padding:10px 16px 13px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a877f;background:#faf9f6;border-top:1px solid #eceae3}
 
 /* diff feed */
 .diff{font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.45;border-radius:8px;padding:8px 11px;animation:fadeUp .3s ease both;display:flex;gap:8px;align-items:baseline}
@@ -145,6 +147,7 @@ a{color:inherit}
 /* segmented size selector */
 .sizeseg{font-family:'IBM Plex Sans';font-size:12.5px;font-weight:500;cursor:pointer;padding:6px 13px;border-radius:6px;border:none;background:transparent;color:#8a877f}
 .sizeseg.on{background:#fff;color:#1e50c0;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.sizeseg:disabled{color:#bbb7ae;cursor:not-allowed;text-decoration:line-through}
 
 /* memory-feed entries */
 .mentry{font-size:12.5px;line-height:1.45;border-radius:7px;padding:7px 10px;animation:fadeUp .25s ease both;font-family:'IBM Plex Mono',monospace}

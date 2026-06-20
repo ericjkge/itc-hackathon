@@ -7,44 +7,10 @@ const el = (tag, cls, html) => {
   if (html != null) n.innerHTML = html;
   return n;
 };
-/* ---- backend wiring + health-gated fixture fallback ----
- * Live: calls go to CFG.backend (the GPU box over a tunnel), or same-origin.
- * Fallback: when the backend is unreachable — or the hard cutoff has passed —
- * the demos replay recorded fixtures from /fixtures instead. See config.js. */
-const CFG = window.AGENTHN_CONFIG || { backend: "", cutoff: null };
-const BACKEND = CFG.backend || "";
+/* The deployed demo is cache-only. The GPU backend is used offline to produce
+ * these committed fixtures, but the browser never contacts it. */
+const REPLAY_STEP_MS = 200;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-const api = async (path, body) => {
-  const res = await fetch(BACKEND + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(path + " -> " + res.status);
-  return res.json();
-};
-
-// Past the hard cutoff we never even ping — straight to fixtures.
-function pastCutoff() {
-  return CFG.cutoff != null && !Number.isNaN(CFG.cutoff) && Date.now() >= CFG.cutoff;
-}
-
-// Primary trigger: is the live backend reachable right now? (re-checked before
-// each demo action, so the site degrades the instant the server goes away.)
-async function isLive() {
-  if (pastCutoff()) return false;
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2500);
-    const r = await fetch(BACKEND + "/api/health", { signal: ctrl.signal });
-    clearTimeout(t);
-    const state = await r.json().catch(() => ({}));
-    return r.ok && !state.busy;
-  } catch (e) {
-    return false;
-  }
-}
 
 // Load a recorded fixture (always same-origin / bundled with the static site).
 const loadFixture = (name) => fetch("/fixtures/" + name).then((r) => {
@@ -52,18 +18,14 @@ const loadFixture = (name) => fetch("/fixtures/" + name).then((r) => {
   return r.json();
 });
 
-// Replay a recorded SSE stream: a list of { t, f } (ms offset + frame). Each
-// frame is handed to `dispatch`; inter-frame gaps are clamped so a long real
-// run still replays at a watchable pace. Returns a {cancel} handle.
+// Replay a recorded stream at a fixed, presentation-friendly cadence. Captured
+// timestamps remain provenance only and never affect playback speed.
 function replayStream(frames, dispatch, onDone) {
   let cancelled = false;
   (async () => {
-    let prev = frames.length ? frames[0].t : 0;
     for (const item of frames) {
       if (cancelled) return;
-      const gap = Math.min(900, Math.max(40, (item.t || 0) - prev));
-      prev = item.t || 0;
-      await sleep(gap);
+      await sleep(REPLAY_STEP_MS);
       if (cancelled) return;
       dispatch(item.f);
     }
@@ -79,7 +41,7 @@ const DEMO_META = [
   { num: "03", label: "Skills" },
   { num: "04", label: "Self-Improvement" },
 ];
-let activeDemo = 0; // open on the live long-horizon memory demo
+let activeDemo = 0;
 
 function renderTabs() {
   const row = $("demoTabs");
@@ -96,17 +58,16 @@ function renderTabs() {
   });
 }
 
-/* ============================ DEMO 1: MEMORY (live, SSE) ============================ */
+/* ============================ DEMO 1: MEMORY (captured stream) ============================ */
 const M1 = {
   scenario: "apollo_migration",
   size: "medium",
   running: false,
-  es: null,
-  streamTimer: null,
   replay: null,
   meta: null,
   scenarios: [],
   sizes: [],
+  recordings: new Set(),
 };
 const M1_SIZE_LABEL = { small: "Small", medium: "Medium", large: "Large" };
 const M1_SCEN_LABEL = {
@@ -120,7 +81,15 @@ function m1RenderControls() {
   st.innerHTML = "";
   M1.scenarios.forEach((name) => {
     const b = el("button", "btn-sm" + (name === M1.scenario ? " on" : ""), M1_SCEN_LABEL[name] || name);
-    b.onclick = () => { if (!M1.running) { M1.scenario = name; m1RenderControls(); m1Reset(); } };
+    b.onclick = () => {
+      if (M1.running) return;
+      M1.scenario = name;
+      if (!M1.recordings.has(name + ":" + M1.size)) {
+        M1.size = M1.sizes.find((s) => M1.recordings.has(name + ":" + s)) || M1.size;
+      }
+      m1RenderControls();
+      m1Reset();
+    };
     st.appendChild(b);
   });
   const sz = $("m1Size");
@@ -128,8 +97,10 @@ function m1RenderControls() {
   M1.sizes.forEach((s) => {
     const turns = M1.meta && M1.meta.turns_per_size ? M1.meta.turns_per_size[s] : null;
     const b = el("button", "sizeseg" + (s === M1.size ? " on" : ""), M1_SIZE_LABEL[s] || s);
-    if (turns) b.title = turns + " turns";
-    b.onclick = () => { if (!M1.running) { M1.size = s; m1RenderControls(); m1Reset(); } };
+    const available = M1.recordings.has(M1.scenario + ":" + s);
+    b.disabled = !available;
+    b.title = available ? (turns ? turns + " turns" : "") : (turns ? turns + " turns · " : "") + "recording not committed yet";
+    b.onclick = () => { if (!M1.running && available) { M1.size = s; m1RenderControls(); m1Reset(); } };
     sz.appendChild(b);
   });
 }
@@ -184,8 +155,6 @@ function m1CostCards(methods) {
 const M1_FEEDS = ["m1Hay", "m1NapCtx", "m1MdCtx", "m1NapLog", "m1MdLog", "m1NapResp", "m1MdResp"];
 
 function m1Reset() {
-  if (M1.es) { M1.es.close(); M1.es = null; }
-  if (M1.streamTimer) { clearTimeout(M1.streamTimer); M1.streamTimer = null; }
   if (M1.replay) { M1.replay.cancel(); M1.replay = null; }
   M1.running = false;
   M1_FEEDS.forEach((id) => ($(id).innerHTML = ""));
@@ -306,7 +275,7 @@ function m1Dispatch(f) {
 }
 
 async function m1Replay() {
-  $("m1Progress").textContent = "GPU stream unavailable — replaying captured GPU run…";
+  $("m1Progress").textContent = "replaying captured run · one step every 0.2s…";
   try {
     const frames = await loadFixture("memory_" + M1.scenario + "_" + M1.size + ".json");
     M1.replay = replayStream(frames, m1Dispatch, () => m1Done(false));
@@ -327,54 +296,10 @@ async function m1Run() {
   $("m1NapResp").innerHTML = "";
   $("m1MdResp").innerHTML = "";
 
-  if (!(await isLive())) {
-    await m1Replay();
-    return;
-  }
-
-  $("m1Progress").textContent = "waiting for Prime GPU stream…";
-  const url = BACKEND + "/api/memory/run?scenario=" + encodeURIComponent(M1.scenario) + "&size=" + encodeURIComponent(M1.size);
-  const es = new EventSource(url);
-  let receivedFrame = false;
-  let fallingBack = false;
-  M1.es = es;
-
-  const fallback = () => {
-    if (fallingBack || !M1.running) return;
-    fallingBack = true;
-    es.close();
-    M1.es = null;
-    if (M1.streamTimer) { clearTimeout(M1.streamTimer); M1.streamTimer = null; }
-    void m1Replay();
-  };
-
-  // A tunnel can pass health checks while its SSE request remains stuck in
-  // CONNECTING. Do not leave the demo spinner running forever in that state.
-  M1.streamTimer = setTimeout(fallback, 20000);
-  es.onmessage = (ev) => {
-    const frame = JSON.parse(ev.data);
-    if (frame.type === "busy") {
-      fallback();
-      return;
-    }
-    // A queue-status frame confirms streaming works, but retain the timeout
-    // until the GPU actually starts returning trajectory data.
-    if (!receivedFrame && frame.type !== "status") {
-      receivedFrame = true;
-      clearTimeout(M1.streamTimer);
-      M1.streamTimer = null;
-    }
-    m1Dispatch(frame);
-  };
-  es.onerror = () => {
-    if (!receivedFrame) fallback();
-    else m1Done(true);
-  };
+  await m1Replay();
 }
 
 function m1Done(err) {
-  if (M1.es) { M1.es.close(); M1.es = null; }
-  if (M1.streamTimer) { clearTimeout(M1.streamTimer); M1.streamTimer = null; }
   if (M1.replay) { M1.replay.cancel(); M1.replay = null; }
   M1.running = false;
   $("m1Run").textContent = "Run trajectory ▸";
@@ -386,15 +311,15 @@ function m1Done(err) {
 
 async function m1Init() {
   try {
-    // Live backend first, then the bundled fixture, then a hard-coded default.
-    const meta = await (BACKEND || !pastCutoff()
-      ? fetch(BACKEND + "/api/memory/meta").then((r) => { if (!r.ok) throw 0; return r.json(); })
-      : Promise.reject(0)
-    ).catch(() => loadFixture("memory_meta.json"));
+    const meta = await loadFixture("memory_meta.json");
     M1.scenarios = meta.scenarios;
     M1.sizes = meta.sizes;
+    M1.recordings = new Set(meta.recordings || []);
     M1.meta = { turns_per_size: meta.turns_per_size };
     if (!M1.scenarios.includes(M1.scenario)) M1.scenario = M1.scenarios[0];
+    if (!M1.recordings.has(M1.scenario + ":" + M1.size)) {
+      M1.size = M1.sizes.find((s) => M1.recordings.has(M1.scenario + ":" + s)) || M1.sizes[0];
+    }
   } catch (e) {
     M1.scenarios = ["apollo_migration"];
     M1.sizes = ["small", "medium", "large"];
@@ -405,7 +330,7 @@ async function m1Init() {
   $("m1Reset").onclick = () => { if (!M1.running) m1Reset(); };
 }
 
-/* ============================ DEMO 2: PERSONALIZATION (live) ============================ */
+/* ============================ DEMO 2: PERSONALIZATION (captured choices) ============================ */
 const UID = "demo";
 const P = { phase: 0, facts: 0, adapterReady: false, busy: false };
 const SUGGEST_TEACH = [
@@ -493,21 +418,13 @@ function pAddDiff(diff) {
 async function pSendTeach(text) {
   if (P.busy || !text.trim()) return;
   P.busy = true;
-  $("pInput").value = "";
   pAddMsg("pChat", "user", text);
   const typing = pAddMsg("pChat", "bot", "…", true);
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/personalization/observe", { uid: UID, message: text });
-    } else {
-      const fx = await pFixtures();
-      r = (fx.observe || {})[text] || {
-        reply: "(recorded demo — pick one of the suggested messages above to see a real captured response.)",
-        diff: [],
-        profile: pLastProfile,
-      };
-    }
+    const fx = await pFixtures();
+    const r = (fx.observe || {})[text];
+    if (!r) throw new Error("no recorded response for that choice");
+    await sleep(REPLAY_STEP_MS);
     pLastProfile = r.profile || pLastProfile;
     typing.classList.remove("typing");
     typing.textContent = r.reply;
@@ -531,16 +448,13 @@ async function pRepersonalize() {
   status.style.color = "#1e50c0";
   status.innerHTML = "";
   status.appendChild(el("span", "spinner"));
-  status.appendChild(el("span", "", "internalizing profile → forging LoRA…"));
+  status.appendChild(el("span", "", "replaying captured profile internalization…"));
   $("pRepersonalize").disabled = true;
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/personalization/repersonalize", { uid: UID });
-    } else {
-      const fx = await pFixtures();
-      r = fx.repersonalize || { name: "demo.lora", num_facts: P.facts };
-    }
+    const fx = await pFixtures();
+    if (!fx.repersonalize) throw new Error("recorded adapter is missing");
+    await sleep(REPLAY_STEP_MS);
+    const r = fx.repersonalize;
     $("pAdapterName").textContent = r.name;
     status.style.background = "#eef6f0";
     status.style.borderColor = "#b5ddc6";
@@ -566,20 +480,16 @@ async function pRepersonalize() {
 async function pSendProbe(text) {
   if (P.busy || !text.trim() || !P.adapterReady) return;
   P.busy = true;
-  $("pInput2").value = "";
   const adapter = $("pAdapterToggle").checked;
   pAddMsg("pChat2", "user", text);
   const typing = pAddMsg("pChat2", "bot", "…", true);
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/personalization/chat", { uid: UID, message: text, adapter });
-    } else {
-      const fx = await pFixtures();
-      const rec = (fx.chat || {})[text];
-      const reply = rec ? rec[adapter ? "true" : "false"] : null;
-      r = { reply: reply || "(recorded demo — pick one of the suggested questions above to see a real captured response.)" };
-    }
+    const fx = await pFixtures();
+    const rec = (fx.chat || {})[text];
+    const reply = rec ? rec[adapter ? "true" : "false"] : null;
+    if (!reply) throw new Error("no recorded response for that choice");
+    await sleep(REPLAY_STEP_MS);
+    const r = { reply };
     typing.classList.remove("typing");
     typing.textContent = r.reply;
     const tag = el("div", "", `↳ adapter ${adapter ? "ON · " + $("pAdapterName").textContent : "OFF · base model"}`);
@@ -595,8 +505,8 @@ async function pSendProbe(text) {
 async function pResetAll() {
   if (P.busy) return;
   P.busy = true;
-  try { await api("/api/personalization/reset", { uid: UID }); } catch (e) {}
   P.phase = 0; P.facts = 0; P.adapterReady = false;
+  pLastProfile = {};
   $("pChat").innerHTML = "";
   pAddMsg("pChat", "bot", "Hi! Tell me about yourself and I'll learn your preferences as we talk.");
   $("pDiffFeed").innerHTML = "";
@@ -632,7 +542,7 @@ function pInitSuggest() {
 
 /* ============================ DEMO 3: SKILLS (self-refine rounds, SSE) ============================ */
 const SK_PHASES = ["Attempt", "Reflect", "Internalize", "Retry"];
-const SK = { es: null, replay: null, running: false, rounds: [], n: 0, curRound: 0, curCorrect: 0 };
+const SK = { replay: null, running: false, rounds: [], n: 0, curRound: 0, curCorrect: 0 };
 const SK_MONO = "'IBM Plex Mono',monospace";
 
 function skStepper(active) {
@@ -761,7 +671,7 @@ function skFrame(f) {
       skStepper(2);
       $("skInternStatus").innerHTML = "";
       $("skInternStatus").appendChild(el("span", "spinner"));
-      $("skInternStatus").appendChild(el("span", "", " forging LoRA from notes…"));
+      $("skInternStatus").appendChild(el("span", "", " replaying captured LoRA internalization…"));
       break;
     case "internalized":
       skStepper(3);
@@ -798,30 +708,11 @@ async function skRun() {
   $("skRun").disabled = true;
   $("skDot").classList.add("live");
 
-  if (await isLive()) {
-    const es = new EventSource(BACKEND + "/api/skills/product/run");
-    SK.es = es;
-    es.onmessage = (ev) => {
-      const frame = JSON.parse(ev.data);
-      if (frame.type === "busy") {
-        es.close();
-        SK.es = null;
-        void skReplay();
-        return;
-      }
-      skFrame(frame);
-    };
-    es.onerror = () => skDone(true);
-    return;
-  }
-
-  await skReplay(false);
+  await skReplay();
 }
 
-async function skReplay(gpuBusy = true) {
-  $("skStatus").textContent = gpuBusy
-    ? "— GPU busy; replaying recorded run…"
-    : "— replaying recorded run…";
+async function skReplay() {
+  $("skStatus").textContent = "— replaying captured run · one step every 0.2s…";
   try {
     const frames = await loadFixture("skills_product.json");
     SK.replay = replayStream(frames, skFrame, () => { if (SK.running) skDone(false); });
@@ -832,7 +723,6 @@ async function skReplay(gpuBusy = true) {
 }
 
 function skDone(err, f) {
-  if (SK.es) { SK.es.close(); SK.es = null; }
   if (SK.replay) { SK.replay.cancel(); SK.replay = null; }
   SK.running = false;
   $("skRun").textContent = "Run self-improvement ▸";
@@ -844,7 +734,6 @@ function skDone(err, f) {
 }
 
 function skReset(soft) {
-  if (SK.es) { SK.es.close(); SK.es = null; }
   if (SK.replay) { SK.replay.cancel(); SK.replay = null; }
   SK.running = false;
   SK.rounds = [];
@@ -976,17 +865,13 @@ function rcTag(text, color) {
 async function rcSend(text) {
   if (RC.busy || !text.trim()) return;
   RC.busy = true;
-  $("rcInput").value = "";
   rcAddMsg("rcChat", "user", text);
   const typing = rcAddMsg("rcChat", "bot", "…", true);
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/skills/converse", { message: text });
-    } else {
-      const rec = await rcRec(text);
-      r = (rec && rec.converse) || { reply: "(recorded demo — pick one of the suggested questions above.)", elapsed: 0, prompt_tokens: 0 };
-    }
+    const rec = await rcRec(text);
+    if (!rec || !rec.converse) throw new Error("no recorded response for that choice");
+    await sleep(REPLAY_STEP_MS);
+    const r = rec.converse;
     typing.classList.remove("typing");
     typing.textContent = r.reply;
     typing.appendChild(rcTag(`↳ base model · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`));
@@ -1009,17 +894,10 @@ async function rcClassify() {
   status.style.display = "";
   status.textContent = "classifying…";
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/skills/classify", { message: RC.lastMessage });
-    } else {
-      const rec = await rcRec(RC.lastMessage);
-      if (!rec || !rec.classify) {
-        status.textContent = "(no recorded classification for this question)";
-        RC.busy = false; $("rcClassifyBtn").disabled = false; return;
-      }
-      r = rec.classify;
-    }
+    const rec = await rcRec(RC.lastMessage);
+    if (!rec || !rec.classify) throw new Error("recorded classification is missing");
+    await sleep(REPLAY_STEP_MS);
+    const r = rec.classify;
     const meta = RC_SKILL_META[r.skill] || { color: "#9a9890" };
     status.innerHTML =
       '<span class="dot" style="background:' + meta.color + ';width:7px;height:7px;display:inline-block;margin-right:6px"></span>routed → ' +
@@ -1050,19 +928,16 @@ async function rcInternalize() {
   status.style.color = "#1e50c0";
   status.innerHTML = "";
   status.appendChild(el("span", "spinner"));
-  status.appendChild(el("span", "", `internalizing ${RC.lastSkill} doc → forging LoRA…`));
+  status.appendChild(el("span", "", `replaying ${RC.lastSkill} internalization…`));
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/skills/internalize", { skill: RC.lastSkill });
-    } else {
-      const rec = await rcRec(RC.lastMessage);
-      r = (rec && rec.internalize) || { skill: RC.lastSkill, cached: true, elapsed: 0 };
-    }
+    const rec = await rcRec(RC.lastMessage);
+    if (!rec || !rec.internalize) throw new Error("recorded internalization is missing");
+    await sleep(REPLAY_STEP_MS);
+    const r = rec.internalize;
     status.style.background = "#eef6f0";
     status.style.borderColor = "#b5ddc6";
     status.style.color = "#2f7d57";
-    status.innerHTML = `<span style="font-size:15px">↯</span><span><strong>${r.skill}.lora</strong> · ${r.cached ? "already cached" : r.elapsed + "s to forge"}</span>`;
+    status.innerHTML = `<span style="font-size:15px">↯</span><span><strong>${r.skill}.lora</strong> · captured GPU result</span>`;
     RC.phase = 2;
     rcStepper();
     const ph2 = $("rcPhase2");
@@ -1090,13 +965,10 @@ async function rcAskAgain() {
   before.appendChild(rcTag("↳ before · base model"));
   const typing = rcAddMsg("rcChat2", "bot", "…", true);
   try {
-    let r;
-    if (await isLive()) {
-      r = await api("/api/skills/converse-again", { message: RC.lastMessage, skill: RC.lastSkill });
-    } else {
-      const rec = await rcRec(RC.lastMessage);
-      r = (rec && rec.converse_again) || { reply: "(recorded demo — pick one of the suggested questions above.)", elapsed: 0, prompt_tokens: 0 };
-    }
+    const rec = await rcRec(RC.lastMessage);
+    if (!rec || !rec.converse_again) throw new Error("recorded retry is missing");
+    await sleep(REPLAY_STEP_MS);
+    const r = rec.converse_again;
     typing.classList.remove("typing");
     typing.textContent = r.reply;
     typing.appendChild(rcTag(`↳ after · ${RC.lastSkill} adapter restored · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`, "#2f6ae0"));
@@ -1137,18 +1009,14 @@ async function init() {
   renderTabs();
   DEMO_META.forEach((_, j) => ($(`demo-${j}`).style.display = j === activeDemo ? "" : "none"));
 
-  // demo 1 (live memory)
+  // demo 1 (captured memory)
   await m1Init();
 
   // demo 2
   pInitSuggest();
   await pResetAll();
   $("pResetAll").onclick = pResetAll;
-  $("pSend").onclick = () => pSendTeach($("pInput").value);
-  $("pInput").addEventListener("keydown", (e) => { if (e.key === "Enter") pSendTeach($("pInput").value); });
   $("pRepersonalize").onclick = pRepersonalize;
-  $("pSend2").onclick = () => pSendProbe($("pInput2").value);
-  $("pInput2").addEventListener("keydown", (e) => { if (e.key === "Enter") pSendProbe($("pInput2").value); });
   $("pReset2").onclick = () => { $("pChat2").innerHTML = ""; pAddMsg("pChat2", "bot", "Cleared. Ask me something."); };
   $("pAdapterToggle").addEventListener("change", (e) => {
     const on = e.target.checked;
@@ -1164,26 +1032,12 @@ async function init() {
   // demo 4 (self-improving skills — converse / document / internalize / converse again)
   rcReset();
   rcInitSuggest();
-  $("rcSend").onclick = () => rcSend($("rcInput").value);
-  $("rcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") rcSend($("rcInput").value); });
   $("rcReset").onclick = () => { if (!RC.busy) rcReset(); };
   $("rcClassifyBtn").onclick = rcClassify;
   $("rcInternalizeBtn").onclick = rcInternalize;
   $("rcAskAgainBtn").onclick = rcAskAgain;
   rcInitQuestionsModal();
 
-  // health badge — reflects whether demos are hitting the live model or
-  // replaying recorded fixtures (backend down / past the cutoff).
-  if (await isLive()) {
-    const live = $("liveBadge");
-    if (live) live.textContent = "live · D2L";
-    $("modeBadge").textContent = "backend: Doc-to-LoRA (live)";
-  } else {
-    const live = $("liveBadge");
-    if (live) live.textContent = "recorded";
-    $("modeBadge").textContent = pastCutoff()
-      ? "backend: offline — replaying recorded runs"
-      : "backend: unreachable — replaying recorded runs";
-  }
+  $("modeBadge").textContent = "cache-only · captured GPU runs";
 }
 init();

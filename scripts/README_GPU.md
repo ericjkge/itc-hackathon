@@ -1,63 +1,18 @@
-# GPU demo server — one-script lifecycle
+# GPU fixture generation
 
-The static site (Vercel) talks to a live FastAPI backend on a GPU box over a
-tunnel, and **auto-falls back to recorded fixtures** when the backend is gone
-(health check fails, or the 9pm PT hard cutoff passes). One script does the
-whole lifecycle: expose → serve → switch → kill → shutdown. Existing fixtures
-are reused by default, so reruns do not occupy the GPU before opening the port.
+The deployed site is static and cache-only. This backend exists solely to
+regenerate the committed responses in `src/agenthn/webapp/static/fixtures/`.
+It binds to localhost and does not create a tunnel or change frontend config.
 
-## What you need on the server (Prime Intellect, 1×A100)
-
-1. **The doc-to-lora venv with the GPU stack** (torch + `ctx_to_lora` + the
-   hypernetwork checkpoint), exactly as the rest of the project expects. Default
-   path `/home/ubuntu/doc-to-lora/.venv`; override with `PY=/path/to/python`.
-   - Install this repo into that venv: `uv pip install -e . --python <venv>`
-   - HF auth if the checkpoint needs it: `huggingface-cli login`
-2. **git push access** from the box (SSH key or token) so it can auto-commit the
-   fixtures and the config switch to `main`.
-3. **Outbound HTTPS** (for the cloudflared tunnel; the script auto-downloads the
-   `cloudflared` binary if it's missing).
-4. `curl` + `bash` (standard).
-
-## Run it
+## Capture missing Large memory runs
 
 ```bash
-git clone <repo> && cd itc-hackathon
-bash scripts/preflight.sh        # checks venv, model import, HF auth, git push, cloudflared, schedule
-bash scripts/run_demo_server.sh  # the full lifecycle (best inside tmux/screen)
+CAPTURE_FIXTURES=1 CAPTURE_SIZES=large bash scripts/run_demo_server.sh
 ```
 
-That's it. The script:
+The capture script records all three Large scenarios, refreshes the recording
+inventory in `memory_meta.json`, and updates `.captured.json`. Large remains
+disabled in the browser until those three fixture files exist.
 
-1. Starts the backend and waits for `/api/health`.
-2. Opens a cloudflared tunnel, writes the URL into `static/config.js`, commits + pushes
-   (Vercel auto-redeploys → site goes live on the GPU).
-3. Skips fixture capture by default because the captured data is already committed.
-4. Serves until **8:55pm PT**. The shared model lock rejects contention with 503
-   after a short wait so disconnected browser requests cannot build a stale queue.
-5. At **8:55pm PT**: reverts `config.js` (removes the GPU URL) → commits + pushes →
-   site flips to replaying the recorded runs.
-6. At **9:00pm PT**: kills the tunnel + server.
-7. Powers off the instance.
-
-## Knobs (env vars)
-
-| var | default | meaning |
-|-----|---------|---------|
-| `PY` | `/home/ubuntu/doc-to-lora/.venv/bin/python` | interpreter w/ GPU stack |
-| `PORT` | `8000` | backend port |
-| `SWITCH_AT` | `2026-06-20T20:55:00-07:00` | when site → fixtures |
-| `KILL_AT` | `2026-06-20T21:00:00-07:00` | when GPU server dies |
-| `CAPTURE_SIZES` | `small medium` | memory sizes to record (add `large` if time) |
-| `CAPTURE_FIXTURES` | `0` | set to `1` only when fixtures must be regenerated |
-| `DO_SHUTDOWN` | `1` | poweroff instance at the end (`0` to keep it) |
-
-## Just capture fixtures (no serving / scheduling)
-
-```bash
-# server already running on :8000
-CAPTURE_BASE=http://127.0.0.1:8000 python scripts/capture_fixtures.py
-```
-
-Fixtures are bundled into the Vercel build (`static/` → `public/`), so once
-pushed the site replays them with no backend at all.
+To recapture existing files, add `CAPTURE_FORCE=1`. To run the fixture backend
+without capturing, omit `CAPTURE_FIXTURES` and stop it with Ctrl-C.

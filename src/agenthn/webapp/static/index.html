@@ -28,14 +28,14 @@
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:26px">
       <a href="https://github.com/ericjkge/itc-hackathon" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:9px;font-size:14px;font-weight:500;color:#fff;background:#1c1b19;padding:10px 18px;border-radius:7px;text-decoration:none"><svg width="16" height="16" viewBox="0 0 16 16" fill="#fff" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.65 7.65 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg> GitHub <span style="font-family:'IBM Plex Mono',monospace;color:#9db9ef">↗</span></a>
-      <a href="#demos" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#2f6ae0;background:#ebf2fe;border:1px solid #cdddfb;padding:10px 18px;border-radius:7px;text-decoration:none">Jump to live demos ↓</a>
+      <a href="#demos" style="display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:#2f6ae0;background:#ebf2fe;border:1px solid #cdddfb;padding:10px 18px;border-radius:7px;text-decoration:none">Jump to interactive demos ↓</a>
     </div>
   </header>
 
   <!-- ===== ABSTRACT ===== -->
   <section style="max-width:1080px;margin:0 auto;padding:56px 24px 0">
     <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#2f6ae0;margin-bottom:18px">Abstract</div>
-    <p style="font-family:'IBM Plex Serif',Georgia,serif;font-size:21px;line-height:1.62;color:#26241f;margin:0;max-width:62ch">Text-based memory breaks over long horizons and wastes the context window. We instead use hypernetworks to allow an agent to edit their own parameters at inference time. A hypernetwork (<em>Doc-to-LoRA</em>) converts context into LoRA adapters through a single forward pass, avoiding the lengthy training runs of SFT or RL. We show four applications — <strong>memory</strong>, <strong>personalization</strong>, <strong>skills</strong>, and <strong>self-improvement</strong> — each with a live, interactive demo below.</p>
+    <p style="font-family:'IBM Plex Serif',Georgia,serif;font-size:21px;line-height:1.62;color:#26241f;margin:0;max-width:62ch">Text-based memory breaks over long horizons and wastes the context window. We instead use hypernetworks to allow an agent to edit their own parameters at inference time. A hypernetwork (<em>Doc-to-LoRA</em>) converts context into LoRA adapters through a single forward pass, avoiding the lengthy training runs of SFT or RL. We show four applications — <strong>memory</strong>, <strong>personalization</strong>, <strong>skills</strong>, and <strong>self-improvement</strong> — each with an interactive replay of a captured GPU run below.</p>
   </section>
 
   <!-- ===== CONTRIBUTIONS ===== -->
@@ -95,8 +95,8 @@
   <!-- ===== DEMOS HEADER ===== -->
   <section id="demos" style="max-width:1080px;margin:0 auto;padding:56px 24px 0">
     <div>
-      <h2 style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0 0 12px">See the weights change in real time</h2>
-      <p style="font-size:17px;line-height:1.6;color:#5c594f;margin:0;max-width:62ch">Four scenarios, <strong>all live</strong> — wired to the Doc-to-LoRA hook on gemma-2-2b-it.</p>
+      <h2 style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0 0 12px">See the captured runs unfold step by step</h2>
+      <p style="font-size:17px;line-height:1.6;color:#5c594f;margin:0;max-width:62ch">Four scenarios, replayed from <strong>captured Doc-to-LoRA runs</strong> on gemma-2-2b-it.</p>
     </div>
     <div id="demoTabs" class="tabrow" style="margin-top:28px"></div>
   </section>
@@ -228,7 +228,7 @@
             </tr>
             <tr style="vertical-align:top">
               <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;font-weight:700;color:#1e50c0">Technical Execution</td>
-              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55"><strong>It runs, live</strong>, on a real gemma-2-2b-it + Doc-to-LoRA — try it above. Backed by a full <strong>ablation ladder</strong>, a <strong>5-seed n=100 statistical eval with 95% CIs</strong>, a <strong>measured cost model</strong>, and a <strong>trained Cartridges baseline</strong>. Every number traces to a script in the repo.</td>
+              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55"><strong>These are real captured runs</strong> from gemma-2-2b-it + Doc-to-LoRA. Backed by a full <strong>ablation ladder</strong>, a <strong>5-seed n=100 statistical eval with 95% CIs</strong>, a <strong>measured cost model</strong>, and a <strong>trained Cartridges baseline</strong>. Every number traces to a script in the repo.</td>
             </tr>
             <tr style="vertical-align:top">
               <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;font-weight:700;color:#1e50c0">Novelty &amp; Insight</td>
@@ -240,7 +240,7 @@
             </tr>
             <tr style="vertical-align:top">
               <td style="padding:14px 12px 14px 0;font-weight:700;color:#1e50c0">Presentation &amp; Demo</td>
-              <td style="padding:14px 0;color:#3a3832;line-height:1.55"><strong>You can run it yourself</strong> — live side-by-side vs RAG, markdown, vanilla, and a trained Cartridges cache. We report <strong>honest numbers with CIs and the trade-offs we lose on</strong>, plus a plain-words explainer. It works, and we're precise about <em>to what extent</em>.</td>
+              <td style="padding:14px 0;color:#3a3832;line-height:1.55"><strong>You can replay it yourself</strong> — side-by-side vs RAG, markdown, vanilla, and a trained Cartridges cache. We report <strong>honest numbers with CIs and the trade-offs we lose on</strong>, plus a plain-words explainer. It works, and we're precise about <em>to what extent</em>.</td>
             </tr>
           </tbody>
         </table>
@@ -271,10 +271,7 @@
         <div style="border-right:1px solid #eceae3;display:flex;flex-direction:column">
           <div id="pChat" class="feed" style="height:300px"></div>
           <div class="suggestrow" id="pSuggest"></div>
-          <div class="inputrow">
-            <input id="pInput" type="text" placeholder="Tell the agent about yourself…" autocomplete="off">
-            <button id="pSend" class="btn-primary">Send</button>
-          </div>
+          <div class="recorded-note">Choose a captured message above · responses reveal step by step</div>
         </div>
         <!-- memory panel -->
         <div style="display:flex;flex-direction:column">
@@ -309,10 +306,7 @@
       </div>
       <div class="suggestrow" id="pSuggest2"></div>
       <div id="pChat2" class="feed" style="height:260px"></div>
-      <div class="inputrow">
-        <input id="pInput2" type="text" placeholder="Ask anything — no prior turns in context…" autocomplete="off">
-        <button id="pSend2" class="btn-primary">Send</button>
-      </div>
+      <div class="recorded-note">Choose a captured question above · toggle the adapter to compare recordings</div>
       <div style="padding:11px 18px;border-top:1px solid #eceae3;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9a9890">↳ answers come only from the weights — toggle the adapter to see personalization appear and vanish.</div>
     </div>
   </section>
@@ -381,11 +375,8 @@
         <button id="rcReset" class="btn-ghost">Reset demo</button>
       </div>
       <div id="rcChat" class="feed" style="height:220px"></div>
-      <div class="inputrow">
-        <input id="rcInput" type="text" placeholder="…" autocomplete="off">
-        <button id="rcSend" class="btn-primary">Send</button>
-      </div>
       <div class="suggestrow" id="rcSuggest"></div>
+      <div class="recorded-note">Choose a captured prompt above, then advance through each recorded stage</div>
 
       <div class="colhead" style="border-top:1px solid #eceae3">
         <span class="eyebrow">2 · Document — classify the question, surface its reference doc</span>
@@ -724,7 +715,6 @@
     <span id="modeBadge" style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#a6a299"></span>
   </footer>
 </div>
-<script src="/config.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>

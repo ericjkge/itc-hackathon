@@ -34,31 +34,15 @@ Requires HF login for the gated `google/gemma-2-2b-it` base model
 /home/ubuntu/doc-to-lora/.venv/bin/python scripts/smoke_test.py
 ```
 
-## Web app (demo UI)
+## Web app (cache-only demo UI)
 
-A FastAPI app serves the single-page demo and wires the **personalization** track
-live to the Doc-to-LoRA hook (memory & skills tabs are scripted previews).
+The deployed browser loads only committed files from `webapp/static/fixtures`.
+It never health-checks or sends requests to the Prime Intellect/GPU backend.
+Captured streams replay one frame every 200 ms; personalization and skills use
+recorded example choices so every enabled action has a genuine cached result.
 
-```bash
-# real model, on the GPU box (loads the checkpoint on first request)
-/home/ubuntu/doc-to-lora/.venv/bin/python -m uvicorn agenthn.webapp.app:app \
-    --host 0.0.0.0 --port 8000
-```
-
-Then open `http://<host>:8000`. The personalization demo flow is: chat with the
-agent (preferences are extracted into a live diff panel per turn) → **Repersonalize**
-to internalize the profile into a per-user LoRA → a **new empty-context session**
-with an **adapter ON/OFF** toggle showing the personalization lives in the weights,
-not the prompt.
-
-No GPU? Run the mock backend anywhere (same UI, canned responses):
-
-```bash
-AGENTHN_MOCK=1 python -m uvicorn agenthn.webapp.app:app --port 8000
-```
-
-The mock also auto-activates if torch / `ctx_to_lora` can't be imported. `/api/health`
-reports which backend is live.
+The FastAPI/GPU code remains available only for regenerating fixtures. See
+`scripts/README_GPU.md`, including the command for capturing Large memory runs.
 
 ## Layout
 
