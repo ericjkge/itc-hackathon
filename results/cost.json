@@ -1,0 +1,57 @@
+{
+  "price_per_Mtok": {
+    "in": 3.0,
+    "cache_write": 3.75,
+    "cache_read": 0.3,
+    "out": 15.0
+  },
+  "scenario": {
+    "history_tokens": 48000,
+    "query_tokens": 10,
+    "output_tokens": 30,
+    "n_queries": 1000,
+    "cartridge_kv_tokens": 1244
+  },
+  "methods": {
+    "vanilla": {
+      "query_cold": 0.14448,
+      "query_warm": 0.01488,
+      "creation": 0.0,
+      "online": true,
+      "quality_note": "0% once history > window",
+      "ctx": 48000,
+      "total_warm": 14.88,
+      "total_cold": 144.48
+    },
+    "rag": {
+      "query_cold": 0.000828,
+      "query_warm": 0.000828,
+      "creation": 0.0144,
+      "online": true,
+      "quality_note": "~100% (lossless text)",
+      "ctx": 116,
+      "total_warm": 0.8424,
+      "total_cold": 0.8424
+    },
+    "cartridges": {
+      "query_cold": 0.000853,
+      "query_warm": 0.000853,
+      "creation": 43.2,
+      "online": false,
+      "quality_note": "matches ICL (paper)",
+      "ctx": 1244,
+      "total_warm": 44.0532,
+      "total_cold": 44.0532
+    },
+    "napora": {
+      "query_cold": 0.000471,
+      "query_warm": 0.000471,
+      "creation": 0.144,
+      "online": true,
+      "quality_note": "~87% (lossy encoding)",
+      "ctx": 7,
+      "total_warm": 0.615,
+      "total_cold": 0.615
+    }
+  }
+}

@@ -25,16 +25,13 @@ from pathlib import Path
 import torch
 
 from agenthn.core.model import D2LModel
-from agenthn.memory import NapLoRAMemory, TextRAGMemory, VanillaContextMemory
+from agenthn.memory import NapLoRAMemory, TextRAGMemory, VanillaContextMemory, hit
 from agenthn.memory.scenarios import GEMMA_WINDOW, _FILLER, _NEEDLE_SETS
 
 CHECKPOINTS = [1000, 2000, 4000, 8000, 16000, 32000, 48000]
 NAP_K = 4
 RESULTS = Path(__file__).resolve().parents[1] / "results" / "scaling.json"
 
-
-def hit(ans: str, needle: str) -> bool:
-    return needle.lower() in ans.lower()
 
 
 def build_stream(model: D2LModel, target_tokens: int):
