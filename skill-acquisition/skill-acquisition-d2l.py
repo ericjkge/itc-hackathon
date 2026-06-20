@@ -202,13 +202,69 @@ HOLDOUT_QUESTIONS = [
         expected=1000 * (20 / 4),
         formula="a = (v-v0)/t, F = m*a",
     ),
+    dict(
+        question=(
+            "A 1200 kg car traveling at 24 m/s skids to a stop on a "
+            "horizontal road with a coefficient of friction of 0.4. What is "
+            "the magnitude of the deceleration caused by friction?"
+        ),
+        expected=0.4 * 9.8,
+        formula="F_friction = mu*m*g, a = F/m (mass cancels)",
+    ),
+    dict(
+        question=(
+            "Two masses of 50 kg and 70 kg are 5 m apart. What is the "
+            "gravitational force between them (G = 6.674e-11 N*m^2/kg^2)?"
+        ),
+        expected=6.674e-11 * 50 * 70 / 5**2,
+        formula="F = G*m1*m2/r^2",
+    ),
+    dict(
+        question=(
+            "A 1500 kg car traveling at 25 m/s comes to a stop in 5 seconds "
+            "due to braking. What is the magnitude of the net braking force?"
+        ),
+        expected=1500 * (25 / 5),
+        formula="a = (v-v0)/t, F = m*a",
+    ),
+    dict(
+        question=(
+            "A 2 kg block sliding at 10 m/s on a horizontal surface "
+            "(coefficient of friction 0.5) comes to a stop. What is the "
+            "magnitude of the impulse needed to stop it?"
+        ),
+        expected=2 * 10,
+        formula="J = delta_p = m*delta_v (mu is a distractor, not needed)",
+    ),
+    dict(
+        question=(
+            "A 0.8 kg ball moving at 5 m/s is brought to rest by a constant "
+            "force acting over 0.4 s. What is the magnitude of the average "
+            "force applied?"
+        ),
+        expected=0.8 * 5 / 0.4,
+        formula="delta_p = m*delta_v, F = delta_p/delta_t",
+    ),
 ]
 
 NUMBER_RE = re.compile(r"[-+]?\d+\.?\d*(?:[eE][-+]?\d+)?")
+SUPERSCRIPT_MAP = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹⁻", "0123456789-")
+LIST_MARKER_RE = re.compile(r"(?m)^\s*\*{0,2}\d+\.\s")
+
+
+def normalize_scientific_notation(text):
+    # strip numbered-step markers ("1. ", "**4.** ") at line starts -- they
+    # get misparsed as numeric answers, e.g. a truncated response ending in
+    # "4. Cancel..." can spuriously match a small expected value like 3.92.
+    text = LIST_MARKER_RE.sub("", text)
+    # the model sometimes writes "5.0055 × 10⁻¹⁰" (unicode superscripts)
+    # instead of "5.0055e-10" -- fold both into the same parseable form.
+    text = text.translate(SUPERSCRIPT_MAP)
+    return re.sub(r"(\d+\.?\d*)\s*[×x\*]\s*10\^?(-?\d+)", r"\1e\2", text)
 
 
 def check_numeric(answer, expected, rel_tol=0.02):
-    for match in NUMBER_RE.finditer(answer):
+    for match in NUMBER_RE.finditer(normalize_scientific_notation(answer)):
         try:
             val = float(match.group())
         except ValueError:
