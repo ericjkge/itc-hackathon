@@ -6,9 +6,9 @@
 # "What you need on the server" in scripts/README_GPU.md):
 #
 #   1. Start the FastAPI backend (loads the Doc-to-LoRA model on the GPU).
-#   2. Capture REAL demo outputs into static fixtures; commit + push.
-#   3. Open a public tunnel; point the live site at it (config.js); commit + push.
-#   4. Serve — GPU requests from the website queue on the shared model lock —
+#   2. Open a public tunnel; point the live site at it (config.js); commit + push.
+#   3. Optionally capture fixtures when CAPTURE_FIXTURES=1.
+#   4. Serve — concurrent GPU requests fail fast and replay cached fixtures —
 #      until SWITCH_AT (default 8:55pm PT 6/20).
 #   5. At SWITCH_AT: revert config.js to recorded-fixtures mode (remove the GPU
 #      URL); commit + push. The site now replays the captured runs.
@@ -27,9 +27,10 @@ BRANCH="${BRANCH:-main}"
 SWITCH_AT="${SWITCH_AT:-2026-06-20T20:55:00-07:00}"   # site -> fixtures
 KILL_AT="${KILL_AT:-2026-06-20T21:00:00-07:00}"       # kill GPU server
 CAPTURE_SIZES="${CAPTURE_SIZES:-small medium}"
+CAPTURE_FIXTURES="${CAPTURE_FIXTURES:-0}"               # cached already on reruns
 DO_SHUTDOWN="${DO_SHUTDOWN:-1}"                         # poweroff at the end
 CONFIG_JS="src/agenthn/webapp/static/config.js"
-CUTOFF_JS='Date.parse("2026-06-20T21:00:00-07:00")'    # browser-side backstop
+CUTOFF_JS="Date.parse(\"$KILL_AT\")"                    # browser-side backstop
 LOGDIR="logs"; mkdir -p "$LOGDIR" "src/agenthn/webapp/static/fixtures"
 
 # Python interpreter: the doc-to-lora venv has the full GPU stack.
@@ -120,12 +121,7 @@ echo "== 1. start backend =="
 start_server
 wait_health || { echo "aborting"; cleanup; exit 1; }
 
-echo "== 2. capture fixtures =="
-CAPTURE_BASE="http://127.0.0.1:$PORT" CAPTURE_SIZES="$CAPTURE_SIZES" "$PY" scripts/capture_fixtures.py \
-  && push "Capture demo fixtures from live GPU run" \
-  || echo "!! capture step had problems — continuing"
-
-echo "== 3. open public tunnel =="
+echo "== 2. open public tunnel =="
 URL=""
 if resolve_tunnel; then
   "$CFD" tunnel --no-autoupdate --url "http://localhost:$PORT" >"$LOGDIR/tunnel.log" 2>&1 &
@@ -139,14 +135,23 @@ fi
 
 if [ -n "$URL" ]; then
   echo "tunnel up: $URL"
-  echo "== 4. point site at live GPU backend =="
+  echo "== 3. point site at live GPU backend =="
   write_config "$URL"
   push "Point site at live GPU backend"
 else
   echo "!! no tunnel URL — site stays in recorded-fixtures mode (fixtures already pushed)"
 fi
 
-echo "== 5. serving until $SWITCH_AT (GPU requests queue on the shared model lock) =="
+if [ "$CAPTURE_FIXTURES" = "1" ]; then
+  echo "== 4. capture fixtures =="
+  CAPTURE_BASE="http://127.0.0.1:$PORT" CAPTURE_SIZES="$CAPTURE_SIZES" "$PY" scripts/capture_fixtures.py \
+    && push "Capture demo fixtures from live GPU run" \
+    || echo "!! capture step had problems — continuing"
+else
+  echo "== 4. skip fixture capture (CAPTURE_FIXTURES=0) =="
+fi
+
+echo "== 5. serving until $SWITCH_AT (GPU contention falls back to fixtures) =="
 while [ "$(date +%s)" -lt "$SWITCH_TS" ]; do
   if ! kill -0 "$SERVER_PID" 2>/dev/null; then
     echo "!! backend died — restarting"; start_server; wait_health || true

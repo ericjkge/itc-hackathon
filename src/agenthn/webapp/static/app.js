@@ -39,7 +39,8 @@ async function isLive() {
     const t = setTimeout(() => ctrl.abort(), 2500);
     const r = await fetch(BACKEND + "/api/health", { signal: ctrl.signal });
     clearTimeout(t);
-    return r.ok;
+    const state = await r.json().catch(() => ({}));
+    return r.ok && !state.busy;
   } catch (e) {
     return false;
   }
@@ -352,6 +353,10 @@ async function m1Run() {
   M1.streamTimer = setTimeout(fallback, 20000);
   es.onmessage = (ev) => {
     const frame = JSON.parse(ev.data);
+    if (frame.type === "busy") {
+      fallback();
+      return;
+    }
     // A queue-status frame confirms streaming works, but retain the timeout
     // until the GPU actually starts returning trajectory data.
     if (!receivedFrame && frame.type !== "status") {
@@ -796,13 +801,27 @@ async function skRun() {
   if (await isLive()) {
     const es = new EventSource(BACKEND + "/api/skills/product/run");
     SK.es = es;
-    es.onmessage = (ev) => skFrame(JSON.parse(ev.data));
+    es.onmessage = (ev) => {
+      const frame = JSON.parse(ev.data);
+      if (frame.type === "busy") {
+        es.close();
+        SK.es = null;
+        void skReplay();
+        return;
+      }
+      skFrame(frame);
+    };
     es.onerror = () => skDone(true);
     return;
   }
 
-  // Recorded fallback: replay the captured self-refine run.
-  $("skStatus").textContent = "— replaying recorded run…";
+  await skReplay(false);
+}
+
+async function skReplay(gpuBusy = true) {
+  $("skStatus").textContent = gpuBusy
+    ? "— GPU busy; replaying recorded run…"
+    : "— replaying recorded run…";
   try {
     const frames = await loadFixture("skills_product.json");
     SK.replay = replayStream(frames, skFrame, () => { if (SK.running) skDone(false); });

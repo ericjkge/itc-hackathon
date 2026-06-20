@@ -13,8 +13,9 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from pathlib import Path
+from typing import Iterable
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from .runtime import ModelBusyError  # noqa: E402
+
+
+@app.exception_handler(ModelBusyError)
+async def model_busy(_request: Request, exc: ModelBusyError):
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
 service = build_service()
 memory_service = build_memory_service()
 SKILLS_SERVICES = {
@@ -54,6 +64,15 @@ skills_router_service = build_skills_router_service()
 from .runtime import get_model  # noqa: E402
 
 get_model()
+
+
+def _sse(iterable: Iterable[dict]):
+    """Encode frames and turn lock contention into a client-actionable event."""
+    try:
+        for frame in iterable:
+            yield f"data: {json.dumps(frame)}\n\n"
+    except ModelBusyError as exc:
+        yield f"data: {json.dumps({'type': 'busy', 'detail': str(exc)})}\n\n"
 
 
 class ObserveBody(BaseModel):
@@ -132,12 +151,8 @@ def memory_meta() -> dict:
 def memory_run(scenario: str = "apollo_migration", size: str = "medium") -> StreamingResponse:
     """Server-Sent Events stream of the live memory run (one frame per turn/query)."""
 
-    def gen():
-        for frame in memory_service.run(scenario, size):
-            yield f"data: {json.dumps(frame)}\n\n"
-
     return StreamingResponse(
-        gen(),
+        _sse(memory_service.run(scenario, size)),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
     )
@@ -186,12 +201,8 @@ def skills_run(name: str) -> StreamingResponse:
     """Server-Sent Events stream of the live skill-acquisition run for `name`."""
     svc = _skills_service(name)
 
-    def gen():
-        for frame in svc.run():
-            yield f"data: {json.dumps(frame)}\n\n"
-
     return StreamingResponse(
-        gen(),
+        _sse(svc.run()),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

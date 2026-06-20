@@ -3,7 +3,8 @@
 The static site (Vercel) talks to a live FastAPI backend on a GPU box over a
 tunnel, and **auto-falls back to recorded fixtures** when the backend is gone
 (health check fails, or the 9pm PT hard cutoff passes). One script does the
-whole lifecycle: capture → serve → switch → kill → shutdown.
+whole lifecycle: expose → serve → switch → kill → shutdown. Existing fixtures
+are reused by default, so reruns do not occupy the GPU before opening the port.
 
 ## What you need on the server (Prime Intellect, 1×A100)
 
@@ -29,11 +30,11 @@ bash scripts/run_demo_server.sh  # the full lifecycle (best inside tmux/screen)
 That's it. The script:
 
 1. Starts the backend and waits for `/api/health`.
-2. Runs `scripts/capture_fixtures.py` → writes `static/fixtures/*.json`, commits + pushes.
-3. Opens a cloudflared tunnel, writes the URL into `static/config.js`, commits + pushes
+2. Opens a cloudflared tunnel, writes the URL into `static/config.js`, commits + pushes
    (Vercel auto-redeploys → site goes live on the GPU).
-4. Serves until **8:55pm PT** — concurrent website requests queue on the shared
-   model lock (`runtime.py`), so the single A100 is never double-driven.
+3. Skips fixture capture by default because the captured data is already committed.
+4. Serves until **8:55pm PT**. The shared model lock rejects contention with 503
+   after a short wait so disconnected browser requests cannot build a stale queue.
 5. At **8:55pm PT**: reverts `config.js` (removes the GPU URL) → commits + pushes →
    site flips to replaying the recorded runs.
 6. At **9:00pm PT**: kills the tunnel + server.
@@ -48,6 +49,7 @@ That's it. The script:
 | `SWITCH_AT` | `2026-06-20T20:55:00-07:00` | when site → fixtures |
 | `KILL_AT` | `2026-06-20T21:00:00-07:00` | when GPU server dies |
 | `CAPTURE_SIZES` | `small medium` | memory sizes to record (add `large` if time) |
+| `CAPTURE_FIXTURES` | `0` | set to `1` only when fixtures must be regenerated |
 | `DO_SHUTDOWN` | `1` | poweroff instance at the end (`0` to keep it) |
 
 ## Just capture fixtures (no serving / scheduling)

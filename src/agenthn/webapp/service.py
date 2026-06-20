@@ -115,9 +115,9 @@ class LiveService:
     def health(self) -> dict:
         # Report on the shared model, not _store: the model can be loaded by the
         # memory demo before any personalization call has built _store.
-        from .runtime import model_loaded
+        from .runtime import model_status
 
-        return {"model_loaded": model_loaded()}
+        return model_status()
 
 
 def build_service() -> LiveService:
