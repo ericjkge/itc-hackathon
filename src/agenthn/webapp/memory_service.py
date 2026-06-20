@@ -59,6 +59,9 @@ class MemoryService:
         size = size if size in SIZES else "medium"
         scenario = scenario if scenario in SCENARIO_NAMES else SCENARIO_NAMES[0]
         sc = make_scenario(scenario, size)
+        # Emit before acquiring the shared model lock so queued clients receive
+        # immediate feedback instead of appearing to hang with an empty stream.
+        yield {"type": "status", "message": "connected - waiting for Prime GPU slot..."}
         # The lock is held for the WHOLE run by design: the arena swaps LoRA
         # adapters in and out of the single shared D2L model, so two concurrent
         # runs would clobber each other's weights. Parallelism would need a

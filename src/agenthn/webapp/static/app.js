@@ -297,7 +297,8 @@ function m1OnQuery(f) {
 }
 
 function m1Dispatch(f) {
-  if (f.type === "meta") m1OnMeta(f);
+  if (f.type === "status") $("m1Progress").textContent = f.message;
+  else if (f.type === "meta") m1OnMeta(f);
   else if (f.type === "turn") m1OnTurn(f);
   else if (f.type === "query") m1OnQuery(f);
   else if (f.type === "done") m1Done(false);
@@ -350,12 +351,15 @@ async function m1Run() {
   // CONNECTING. Do not leave the demo spinner running forever in that state.
   M1.streamTimer = setTimeout(fallback, 20000);
   es.onmessage = (ev) => {
-    if (!receivedFrame) {
+    const frame = JSON.parse(ev.data);
+    // A queue-status frame confirms streaming works, but retain the timeout
+    // until the GPU actually starts returning trajectory data.
+    if (!receivedFrame && frame.type !== "status") {
       receivedFrame = true;
       clearTimeout(M1.streamTimer);
       M1.streamTimer = null;
     }
-    m1Dispatch(JSON.parse(ev.data));
+    m1Dispatch(frame);
   };
   es.onerror = () => {
     if (!receivedFrame) fallback();
