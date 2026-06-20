@@ -25,6 +25,9 @@ data/adapters/
 /public/
 .vercel/
 
+# tunnel binary (auto-downloaded by scripts/run_demo_server.sh at runtime)
+/bin/
+
 # misc
 .ipynb_checkpoints/
 .DS_Store
