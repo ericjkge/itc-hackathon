@@ -29,7 +29,7 @@ from pathlib import Path
 import torch
 
 from agenthn.core.model import D2LModel
-from agenthn.memory import NapLoRAMemory, TextRAGMemory, VanillaContextMemory
+from agenthn.memory import NapLoRAMemory, TextRAGMemory, VanillaContextMemory, hit
 from agenthn.memory.scenarios import GEMMA_WINDOW, _FILLER
 
 NAP_K = 4
@@ -74,9 +74,6 @@ def build_stream(model, rng, facts, target_tokens):
         turns.append(("user", _FILLER[fi % len(_FILLER)])); fi += 1
     return turns
 
-
-def hit(ans, needle):
-    return needle.lower() in ans.lower()
 
 
 def wilson(k, n, z=1.96):
