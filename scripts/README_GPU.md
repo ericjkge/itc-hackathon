@@ -22,7 +22,8 @@ whole lifecycle: capture → serve → switch → kill → shutdown.
 
 ```bash
 git clone <repo> && cd itc-hackathon
-bash scripts/run_demo_server.sh
+bash scripts/preflight.sh        # checks venv, model import, HF auth, git push, cloudflared, schedule
+bash scripts/run_demo_server.sh  # the full lifecycle (best inside tmux/screen)
 ```
 
 That's it. The script:
