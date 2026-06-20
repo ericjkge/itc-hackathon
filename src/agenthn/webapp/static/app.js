@@ -615,27 +615,48 @@ function skStepper(active) {
 function skRenderTraj() {
   const box = $("skTraj");
   box.innerHTML = "";
+
+  // meterhead — same chrome as the long-horizon-memory visualizers
+  const head = el("div", "meterhead");
+  head.style.marginBottom = "14px";
+  const eyebrow = el("span", "eyebrow");
+  eyebrow.innerHTML = 'Accuracy across self-refine rounds <span style="text-transform:none;letter-spacing:0;color:#b0aca2">— held-out test, no prompt context</span>';
+  const rightLbl = el("span");
+  rightLbl.style.cssText = "font-family:" + SK_MONO + ";font-size:11px;color:#a6a299";
+  head.appendChild(eyebrow);
+  head.appendChild(rightLbl);
+  box.appendChild(head);
+
   if (!SK.rounds.length) {
-    box.innerHTML = '<span style="font-family:' + SK_MONO + ';font-size:12px;color:#9a9890">no rounds yet — the cold attempt scores first</span>';
+    rightLbl.textContent = "";
+    box.appendChild(el("div", "empty", "no rounds yet — the cold attempt scores first"));
     return;
   }
+
   const best = Math.max.apply(null, SK.rounds.map((r) => r.accuracy));
+  rightLbl.textContent = "best " + Math.round(best * 100) + "% · " + SK.rounds.length + " round" + (SK.rounds.length === 1 ? "" : "s");
+
+  const TRACK = 120; // px — matches the fill-bar visual weight
   const wrap = el("div");
-  wrap.style.cssText = "display:flex;align-items:flex-end;gap:16px;height:158px";
+  wrap.style.cssText = "display:flex;align-items:flex-end;gap:16px";
   SK.rounds.forEach((r) => {
     const pct = Math.round(r.accuracy * 100);
     const col = el("div");
-    col.style.cssText = "flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%";
+    col.style.cssText = "flex:1;display:flex;flex-direction:column;align-items:center";
     const lbl = el("div", "", pct + "%");
     lbl.style.cssText = "font-family:" + SK_MONO + ";font-size:12.5px;font-weight:600;color:#26241f;margin-bottom:5px";
+    // vertical track + fill — the column analogue of .filltrack / .fillbar
+    const track = el("div");
+    track.style.cssText = "width:100%;max-width:66px;height:" + TRACK + "px;background:#efece6;border-radius:7px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end";
     const bar = el("div");
-    const h = Math.max(3, Math.round(r.accuracy * 120));
+    const h = Math.max(3, Math.round(r.accuracy * TRACK));
     const color = r.round === 0 ? "#c0bdb4" : (r.accuracy >= best ? "#2f6ae0" : "#9db9ef");
-    bar.style.cssText = "width:100%;max-width:66px;border-radius:6px 6px 0 0;background:" + color + ";height:" + h + "px;transition:height .45s ease";
+    bar.style.cssText = "width:100%;background:" + color + ";height:" + h + "px;transition:height .45s ease";
+    track.appendChild(bar);
     const cap = el("div", "", r.round === 0 ? "R0 · base" : "R" + r.round);
     cap.style.cssText = "font-family:" + SK_MONO + ";font-size:11px;color:#5c594f;margin-top:7px";
     col.appendChild(lbl);
-    col.appendChild(bar);
+    col.appendChild(track);
     col.appendChild(cap);
     wrap.appendChild(col);
   });
