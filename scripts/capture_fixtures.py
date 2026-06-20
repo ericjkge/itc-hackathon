@@ -46,6 +46,11 @@ SUGGEST_PROBE = [
     "What's my dog's name?",
     "Plan a fun weekend for me.",
 ]
+# Demo 4 (skills router): example questions, mirroring RC_SUGGEST in app.js.
+RC_SUGGEST = [
+    "A 15 kg box sits on a horizontal floor with a coefficient of friction of 0.3. What is the maximum friction force?",
+    "Represent a book with title 'Dune', author 'Frank Herbert', and year 1965 as JSON.",
+]
 
 
 def _req(path: str, body=None, timeout=120):
@@ -142,6 +147,25 @@ def capture_skills() -> None:
     write("skills_product.json", frames)
 
 
+def capture_skills_router() -> None:
+    """Demo 4: converse -> classify -> internalize -> converse-again, per example."""
+    out = {}
+    for msg in RC_SUGGEST:
+        print(f"[skills-router] {msg[:48]!r}")
+        converse = post_json("/api/skills/converse", {"message": msg})
+        classify = post_json("/api/skills/classify", {"message": msg})
+        skill = classify.get("skill")
+        internalize = post_json("/api/skills/internalize", {"skill": skill})
+        again = post_json("/api/skills/converse-again", {"message": msg, "skill": skill})
+        out[msg] = {
+            "converse": converse,
+            "classify": classify,
+            "internalize": internalize,
+            "converse_again": again,
+        }
+    write("skills_router.json", out)
+
+
 def main() -> None:
     print(f"capturing fixtures from {BASE} → {OUT}")
     print(f"  sizes={SIZES} force={FORCE}")
@@ -154,7 +178,8 @@ def main() -> None:
     errors = []
     for label, fn in (("memory", capture_memory),
                       ("personalization", capture_personalization),
-                      ("skills", capture_skills)):
+                      ("skills", capture_skills),
+                      ("skills_router", capture_skills_router)):
         try:
             fn()
         except Exception as e:  # noqa: BLE001 — one broken demo shouldn't sink the rest

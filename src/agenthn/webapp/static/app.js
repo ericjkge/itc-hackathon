@@ -794,6 +794,36 @@ const RC_SKILL_META = {
 };
 const RC = { phase: 0, busy: false, lastMessage: "", lastBaseReply: "", lastSkill: null };
 
+// Example questions (one physics, one formatting) — clicking a chip guarantees
+// the recorded-fallback fixture has a matching captured flow.
+const RC_SUGGEST = [
+  "A 15 kg box sits on a horizontal floor with a coefficient of friction of 0.3. What is the maximum friction force?",
+  "Represent a book with title 'Dune', author 'Frank Herbert', and year 1965 as JSON.",
+];
+
+// Recorded-fallback fixture for demo 4, keyed by message text. Each entry holds
+// the captured { converse, classify, internalize, converse_again } responses.
+let RCFIX = null;
+async function rcFixtures() {
+  if (!RCFIX) RCFIX = await loadFixture("skills_router.json").catch(() => ({}));
+  return RCFIX;
+}
+async function rcRec(msg) {
+  const fx = await rcFixtures();
+  return fx[msg] || null;
+}
+
+function rcInitSuggest() {
+  const box = $("rcSuggest");
+  if (!box) return;
+  RC_SUGGEST.forEach((t) => {
+    const b = el("button", "chip-btn", t.length > 52 ? t.slice(0, 50) + "…" : t);
+    b.title = t;
+    b.onclick = () => { if (!RC.busy) rcSend(t); };
+    box.appendChild(b);
+  });
+}
+
 function rcStepper() {
   const labels = ["Converse", "Document", "Internalize", "Converse again"];
   const box = $("rcStepper");
@@ -832,7 +862,13 @@ async function rcSend(text) {
   rcAddMsg("rcChat", "user", text);
   const typing = rcAddMsg("rcChat", "bot", "…", true);
   try {
-    const r = await api("/api/skills/converse", { message: text });
+    let r;
+    if (await isLive()) {
+      r = await api("/api/skills/converse", { message: text });
+    } else {
+      const rec = await rcRec(text);
+      r = (rec && rec.converse) || { reply: "(recorded demo — pick one of the suggested questions above.)", elapsed: 0, prompt_tokens: 0 };
+    }
     typing.classList.remove("typing");
     typing.textContent = r.reply;
     typing.appendChild(rcTag(`↳ base model · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`));
@@ -855,7 +891,17 @@ async function rcClassify() {
   status.style.display = "";
   status.textContent = "classifying…";
   try {
-    const r = await api("/api/skills/classify", { message: RC.lastMessage });
+    let r;
+    if (await isLive()) {
+      r = await api("/api/skills/classify", { message: RC.lastMessage });
+    } else {
+      const rec = await rcRec(RC.lastMessage);
+      if (!rec || !rec.classify) {
+        status.textContent = "(no recorded classification for this question)";
+        RC.busy = false; $("rcClassifyBtn").disabled = false; return;
+      }
+      r = rec.classify;
+    }
     const meta = RC_SKILL_META[r.skill] || { color: "#9a9890" };
     status.innerHTML =
       '<span class="dot" style="background:' + meta.color + ';width:7px;height:7px;display:inline-block;margin-right:6px"></span>routed → ' +
@@ -888,7 +934,13 @@ async function rcInternalize() {
   status.appendChild(el("span", "spinner"));
   status.appendChild(el("span", "", `internalizing ${RC.lastSkill} doc → forging LoRA…`));
   try {
-    const r = await api("/api/skills/internalize", { skill: RC.lastSkill });
+    let r;
+    if (await isLive()) {
+      r = await api("/api/skills/internalize", { skill: RC.lastSkill });
+    } else {
+      const rec = await rcRec(RC.lastMessage);
+      r = (rec && rec.internalize) || { skill: RC.lastSkill, cached: true, elapsed: 0 };
+    }
     status.style.background = "#eef6f0";
     status.style.borderColor = "#b5ddc6";
     status.style.color = "#2f7d57";
@@ -920,7 +972,13 @@ async function rcAskAgain() {
   before.appendChild(rcTag("↳ before · base model"));
   const typing = rcAddMsg("rcChat2", "bot", "…", true);
   try {
-    const r = await api("/api/skills/converse-again", { message: RC.lastMessage, skill: RC.lastSkill });
+    let r;
+    if (await isLive()) {
+      r = await api("/api/skills/converse-again", { message: RC.lastMessage, skill: RC.lastSkill });
+    } else {
+      const rec = await rcRec(RC.lastMessage);
+      r = (rec && rec.converse_again) || { reply: "(recorded demo — pick one of the suggested questions above.)", elapsed: 0, prompt_tokens: 0 };
+    }
     typing.classList.remove("typing");
     typing.textContent = r.reply;
     typing.appendChild(rcTag(`↳ after · ${RC.lastSkill} adapter restored · ${r.elapsed}s · ${r.prompt_tokens} prompt tok`, "#2f6ae0"));
@@ -987,6 +1045,7 @@ async function init() {
 
   // demo 4 (self-improving skills — converse / document / internalize / converse again)
   rcReset();
+  rcInitSuggest();
   $("rcSend").onclick = () => rcSend($("rcInput").value);
   $("rcInput").addEventListener("keydown", (e) => { if (e.key === "Enter") rcSend($("rcInput").value); });
   $("rcReset").onclick = () => { if (!RC.busy) rcReset(); };
