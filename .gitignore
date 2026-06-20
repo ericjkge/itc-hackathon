@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# venv (we reuse doc-to-lora/.venv; never commit one here)
+.venv/
+venv/
+
+# model weights / checkpoints
+*.bin
+*.pt
+*.pth
+*.safetensors
+
+# runtime data: per-user profiles & cached adapters
+data/profiles/
+data/adapters/
+*.adapter
+
+# misc
+.ipynb_checkpoints/
+.DS_Store
+*.log
+.env

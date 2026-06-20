@@ -1,0 +1,18 @@
+[project]
+name = "agenthn"
+version = "0.0.1"
+description = "AgentHN (Agent + Hypernetwork) — agents that write to their own weights, built on Doc-to-LoRA."
+readme = "README.md"
+requires-python = ">=3.10"
+# Heavy deps (torch, transformers, ctx_to_lora, ...) come from the shared
+# doc-to-lora/.venv this package is installed into — do NOT re-declare them here,
+# or a fresh resolve would rebuild the multi-GB GPU stack. Add only agenthn-only,
+# light deps below as we need them (e.g. the web framework, anthropic SDK).
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
