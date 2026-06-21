@@ -106,25 +106,7 @@
     <h3 class="demo-title">Constant-cost memory for long-running agents</h3>
 
     <!-- ===== USE-CASE NARRATIVE ===== -->
-    <p style="font-size:16px;line-height:1.62;color:#3a3832;margin:0 0 12px;max-width:74ch">
-      Agents like <strong>Claude Code</strong> and Devin run for hours, and the loop <strong>re-reads its whole
-      context — or a summary of it — on every tool call</strong>. A 100-step task over a 100k-token history pays
-      that cost a hundred times over. Context isn't just a window limit; it's the <strong>dominant, compounding
-      cost of agentic work</strong>.
-    </p>
-    <p style="font-size:16px;line-height:1.62;color:#3a3832;margin:0 0 18px;max-width:74ch">
-      <strong style="color:#2f6ae0">AgentHN puts memory in the weights instead.</strong> Every K turns it compacts
-      the oldest slice of the trajectory into a tiny LoRA adapter — <strong>one forward pass, no training</strong> —
-      and evicts it from context, loading the relevant adapter back only when asked. Per-step context stays
-      <strong>flat no matter how long the agent runs</strong>, and memory is built <strong>online, in real time</strong>.
-    </p>
-
-    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-2px 0 14px;max-width:74ch"><strong>How we test it below:</strong> a needle-in-a-haystack over a trajectory — a few facts (<strong>needles</strong>) are dropped early into a long conversation, then asked about at the very end. <strong style="color:#2f6ae0">AgentHN</strong> compacts the oldest turns into LoRA weights and evicts them; baselines (<strong style="color:#9a7a30">markdown .md</strong>, RAG, vanilla, a trained Cartridges cache) are run side-by-side. Watch the context window and inference cost diverge.</p>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px">
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#f2efe9;border:1px solid #e2ded6;border-radius:7px;padding:5px 11px;color:#5c594f"><strong style="color:#26241f">Base model:</strong> 1 × gemma-2-2b-it (2B params, 8k window)</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#ebf2fe;border:1px solid #cdddfb;border-radius:7px;padding:5px 11px;color:#1e50c0"><strong>Hypernetwork:</strong> 1 × Doc-to-LoRA — context → rank-8 LoRA in one forward pass</span>
-      <span style="font-family:'IBM Plex Mono',monospace;font-size:11.5px;background:#eef6f0;border:1px solid #b5ddc6;border-radius:7px;padding:5px 11px;color:#2f7d57"><strong>Compaction interval:</strong> K = 4 turns → 1 adapter</span>
-    </div>
+    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-6px 0 18px;max-width:74ch">A needle-in-a-haystack over a long trajectory: a few facts (<strong>needles</strong>) are dropped early into the conversation, then asked about at the very end. <strong>AgentHN</strong> compacts the oldest turns into a LoRA adapter every K turns — one forward pass, no training — and evicts them from context, so per-step context stays flat as the conversation grows. Baselines (<strong>markdown .md</strong>, RAG, vanilla, a trained Cartridges cache) run side by side; watch the context window and inference cost diverge.</p>
     <div class="panel">
       <!-- controls -->
       <div class="controlbar">
@@ -213,44 +195,12 @@
       </div>
     </div>
 
-    <!-- ===== JUDGING CRITERIA MAP ===== -->
-    <div class="panel" style="margin-top:22px">
-      <div class="controlbar" style="justify-content:flex-start;gap:12px">
-        <span class="eyebrow">How it holds up</span>
-        <span style="font-size:14px;font-weight:600;color:#26241f">Addressing the evaluation criteria</span>
-      </div>
-      <div style="padding:6px 22px 20px">
-        <table style="width:100%;border-collapse:collapse;font-size:14px">
-          <tbody>
-            <tr style="vertical-align:top">
-              <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;width:200px;font-weight:700;color:#1e50c0">Vision &amp; Problem Fit</td>
-              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55">Long-running agents re-read their whole context <em>every tool call</em>, so cost scales with history × steps. Memory belongs in <strong>weights (O(1) context)</strong>, not the prompt — a direct fit for the bottleneck, not a generic "use an LLM" idea.</td>
-            </tr>
-            <tr style="vertical-align:top">
-              <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;font-weight:700;color:#1e50c0">Technical Execution</td>
-              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55"><strong>These are real captured runs</strong> from gemma-2-2b-it + Doc-to-LoRA. Backed by a full <strong>ablation ladder</strong>, a <strong>5-seed n=100 statistical eval with 95% CIs</strong>, a <strong>measured cost model</strong>, and a <strong>trained Cartridges baseline</strong>. Every number traces to a script in the repo.</td>
-            </tr>
-            <tr style="vertical-align:top">
-              <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;font-weight:700;color:#1e50c0">Novelty &amp; Insight</td>
-              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55">Agent memory as <strong>retrieved weight-deltas</strong> built in <em>one forward pass</em>. The non-obvious finding from building it: naively composing all memory adapters <strong>collapses (0/6)</strong> → you must <strong>retrieve-then-inject</strong>; and we isolated that weight-injection's only cost is <strong>~13% recall</strong>, never the constant-context win.</td>
-            </tr>
-            <tr style="vertical-align:top">
-              <td style="padding:14px 12px 14px 0;border-bottom:1px solid #f0ede6;font-weight:700;color:#1e50c0">Impact &amp; Trajectory</td>
-              <td style="padding:14px 0;border-bottom:1px solid #f0ede6;color:#3a3832;line-height:1.55">If agentic loops re-read context every step, <strong>O(1)-context memory is a step-change in agent $ and latency</strong>, and being <strong>online (no training)</strong> makes it usable mid-session where Cartridges can't go. Trajectory: a bigger model + a hypernetwork trained on agent trajectories closes the 13% recall gap — the constant-cost property is already there.</td>
-            </tr>
-            <tr style="vertical-align:top">
-              <td style="padding:14px 12px 14px 0;font-weight:700;color:#1e50c0">Presentation &amp; Demo</td>
-              <td style="padding:14px 0;color:#3a3832;line-height:1.55"><strong>You can replay it yourself</strong> — side-by-side vs RAG, markdown, vanilla, and a trained Cartridges cache. We report <strong>honest numbers with CIs and the trade-offs we lose on</strong>, plus a plain-words explainer. It works, and we're precise about <em>to what extent</em>.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   </section>
 
   <!-- ===== DEMO 2 : PERSONALIZATION (live) ===== -->
   <section id="demo-1" style="max-width:1080px;margin:0 auto;padding:16px 24px 0;display:none">
     <h3 class="demo-title">Permanent personalization — converse, internalize, then carry it into a fresh session</h3>
+    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-6px 0 18px;max-width:74ch">Chat naturally and the agent extracts your preferences turn by turn into a running profile doc. Repersonalize to internalize that doc into a per-user D2L LoRA adapter, then open a <strong>fresh session</strong> with an empty context — the preferences resurface from the weights alone. Toggle the adapter off to watch them vanish.</p>
 
     <!-- stepper -->
     <div class="panel" style="margin-bottom:18px">
@@ -358,7 +308,7 @@
   <!-- ===== DEMO 3 : SKILLS (converse / document / internalize / converse again) ===== -->
   <section id="demo-2" style="max-width:1080px;margin:0 auto;padding:16px 24px 0;display:none">
     <h3 class="demo-title">Skills — converse, document, internalize, converse again</h3>
-    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-6px 0 18px;max-width:72ch">Ask a physics word problem or a structured-output request cold. Classify it to surface the matching reference doc — a physics formula sheet or a format guide — internalize that doc into a D2L LoRA adapter, then ask the <strong>exact same question again</strong>: same bare prompt, new weights.</p>
+    <p style="font-size:15px;line-height:1.6;color:#5c594f;margin:-6px 0 18px;max-width:74ch">Ask a physics word problem or a structured-output request cold. Classify it to surface the matching reference doc — a physics formula sheet or a format guide — internalize that doc into a D2L LoRA adapter, then ask the <strong>exact same question again</strong>: same bare prompt, new weights.</p>
 
     <!-- stepper -->
     <div class="panel" style="margin-bottom:18px">
@@ -404,39 +354,6 @@
       <div id="rcChat2" class="feed" style="height:240px"></div>
     </div>
 
-    <!-- ===== BENCHMARK RESULT: physics skill acquisition ===== -->
-    <div class="panel" style="margin-top:22px">
-      <div class="controlbar" style="justify-content:flex-start;gap:12px">
-        <span class="eyebrow">Benchmark result</span>
-        <span style="font-size:14px;font-weight:600;color:#26241f">Internalizing the doc beats keeping it in the prompt — at a fraction of the context</span>
-      </div>
-      <div style="padding:18px 22px">
-        <p style="font-size:15px;line-height:1.65;color:#3a3832;margin:0 0 16px;max-width:74ch">
-          The same 20 held-out physics word problems, run three ways on the bare base model.
-          <strong style="color:#94908a">Base</strong> gets no help. <strong style="color:#c79a3a">In-context</strong>
-          pastes the full Newton's-laws formula sheet into every prompt. <strong style="color:#2f6ae0">Adapter</strong>
-          internalizes that same doc once into a D2L LoRA — then answers with <em>nothing</em> in the prompt.
-          The adapter matches (and edges out) in-context accuracy while spending <strong>~32× less</strong> query context.
-        </p>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="grid-2">
-          <img src="/accuracy_by_condition.png" alt="Physics word-problem accuracy: base vs in-context vs D2L adapter"
-               style="width:100%;display:block;border:1px solid #eceae3;border-radius:10px">
-          <img src="/context_tokens.png" alt="Context tokens consumed per question: in-context vs D2L adapter"
-               style="width:100%;display:block;border:1px solid #eceae3;border-radius:10px">
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:16px;font-size:14px;color:#3a3832">
-          <span>📈 <strong>adapter 55% (11/20)</strong> ≥ in-context 50% (10/20), vs <strong>25% (5/20)</strong> cold base</span>
-          <span>🪶 <strong>53 vs 1,707</strong> avg. input tokens/question — <strong>~32× less</strong>, paid once at internalize</span>
-          <span>↯ doc internalized in <strong>~1.3s</strong> into a single rank-8 LoRA, then evicted from context</span>
-        </div>
-        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a6a299;margin-top:10px">
-          measured on gemma-2-2b-it · 20 held-out problems · Newton's-laws formula sheet · skill-acquisition/make_physics_charts.py
-        </div>
-        <div style="margin-top:12px">
-          <a id="rcShowQuestions" href="javascript:void(0)" style="font-size:13px;color:#2f6ae0;text-decoration:underline;cursor:pointer">View all 20 held-out questions →</a>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- ===== MODAL: physics benchmark questions ===== -->
@@ -680,32 +597,43 @@
       </div>
     </div>
 
-    <!-- ===== PLAIN-WORDS EXPLAINER ===== -->
-    <div class="panel" style="margin-top:22px;background:#faf9f6">
-      <div class="controlbar" style="justify-content:flex-start;gap:12px;background:#fff">
-        <span class="eyebrow">Summary:</span>
-        <span style="font-size:14px;font-weight:600;color:#26241f">What we actually did</span>
+  </section>
+
+  <!-- ===== EXPERIMENTS : skills (always visible) ===== -->
+  <section id="experiments-skills" style="max-width:1080px;margin:0 auto;padding:64px 24px 0">
+    <h2 style="font-size:32px;font-weight:600;letter-spacing:-0.02em;margin:0 0 12px">Experiments — skills</h2>
+    <p style="font-size:17px;line-height:1.6;color:#5c594f;margin:0 0 4px;max-width:66ch">Internalizing a reference doc into a D2L LoRA adapter, measured against keeping it in the prompt — on accuracy and query-time context. Every number has a script in the repo.</p>
+    <!-- ===== BENCHMARK RESULT: physics skill acquisition ===== -->
+    <div class="panel" style="margin-top:22px">
+      <div class="controlbar" style="justify-content:flex-start;gap:12px">
+        <span class="eyebrow">Benchmark result</span>
+        <span style="font-size:14px;font-weight:600;color:#26241f">Internalizing the doc beats keeping it in the prompt — at a fraction of the context</span>
       </div>
-      <div style="padding:20px 22px;font-size:15px;line-height:1.7;color:#3a3832;max-width:80ch">
-        <p style="margin:0 0 14px"><strong>The problem.</strong> When an AI agent has a long conversation, it eventually
-        can't fit the whole history in its prompt. The usual fixes (paste the recent text, or keep a notes file)
-        either forget old facts or make every future message bigger and slower.</p>
-        <p style="margin:0 0 14px"><strong>Our idea.</strong> Every <strong>4 turns</strong>, we take the oldest chunk
-        of the conversation and run it through a <em>hypernetwork</em> (Doc-to-LoRA) — a network that reads text and,
-        in <strong>one forward pass</strong>, writes a tiny patch to the model's weights (a "LoRA adapter"). That patch
-        stores the chunk's facts. We then delete the text from the prompt. The conversation lives in <strong>weights,
-        not words</strong>.</p>
-        <p style="margin:0 0 14px"><strong>Answering later.</strong> When you ask a question, we look up which chunk is
-        relevant (a quick keyword search), load just that chunk's patch into the model, and answer — with only the
-        question in the prompt. So the prompt stays tiny no matter how long the conversation gets.</p>
-        <p style="margin:0 0 14px"><strong>What we found, honestly.</strong> It recalls about <strong>87%</strong> of
-        facts and never degrades as the chat grows to 48,000 tokens, while a plain model drops to <strong>0%</strong>
-        once it overflows. Classic retrieval (paste the text) gets <strong>100%</strong> — so storing memory in weights
-        <em>costs ~13% accuracy</em>, and buys back the <strong>cheapest, smallest prompt</strong> and memory built
-        <strong>live, with no training</strong>. That's the niche: unlike Cartridges (trained offline), AgentHN adapts
-        in real time as the agent works.</p>
-        <p style="margin:0;color:#6b6862;font-size:14px"><em>Everything above is measured on a 2-billion-parameter model
-        (gemma-2-2b-it) with one Doc-to-LoRA hypernetwork. Every number has a script in the repo.</em></p>
+      <div style="padding:18px 22px">
+        <p style="font-size:15px;line-height:1.65;color:#3a3832;margin:0 0 16px;max-width:74ch">
+          The same 20 held-out physics word problems, run three ways on the bare base model.
+          <strong style="color:#94908a">Base</strong> gets no help. <strong style="color:#c79a3a">In-context</strong>
+          pastes the full Newton's-laws formula sheet into every prompt. <strong style="color:#2f6ae0">Adapter</strong>
+          internalizes that same doc once into a D2L LoRA — then answers with <em>nothing</em> in the prompt.
+          The adapter matches (and edges out) in-context accuracy while spending <strong>~32× less</strong> query context.
+        </p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px" class="grid-2">
+          <img src="/accuracy_by_condition.png" alt="Physics word-problem accuracy: base vs in-context vs D2L adapter"
+               style="width:100%;display:block;border:1px solid #eceae3;border-radius:10px">
+          <img src="/context_tokens.png" alt="Context tokens consumed per question: in-context vs D2L adapter"
+               style="width:100%;display:block;border:1px solid #eceae3;border-radius:10px">
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px 26px;margin-top:16px;font-size:14px;color:#3a3832">
+          <span>📈 <strong>adapter 55% (11/20)</strong> ≥ in-context 50% (10/20), vs <strong>25% (5/20)</strong> cold base</span>
+          <span>🪶 <strong>53 vs 1,707</strong> avg. input tokens/question — <strong>~32× less</strong>, paid once at internalize</span>
+          <span>↯ doc internalized in <strong>~1.3s</strong> into a single rank-8 LoRA, then evicted from context</span>
+        </div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#a6a299;margin-top:10px">
+          measured on gemma-2-2b-it · 20 held-out problems · Newton's-laws formula sheet · skill-acquisition/make_physics_charts.py
+        </div>
+        <div style="margin-top:12px">
+          <a id="rcShowQuestions" href="javascript:void(0)" style="font-size:13px;color:#2f6ae0;text-decoration:underline;cursor:pointer">View all 20 held-out questions →</a>
+        </div>
       </div>
     </div>
   </section>
