@@ -87,7 +87,10 @@ We summarize the mechanism we build on; see \citet{charakorn2026doctolora} for f
 \end{equation}
 where $\mathcal{D}_c$ is built from many queries $x$ and teacher-sampled responses $y$ for a given context $c$, rather than a single $(c,x,y)$ triplet (which would risk overfitting to one query). \DTL{} \emph{meta-trains} a hypernetwork $H_\phi$ to amortize this whole optimization -- query generation and gradient descent alike -- into one forward pass: $H_\phi(c) = \Delta W_c$, trained so that $\theta+H_\phi(c)$ matches the CD target across a large corpus of contexts:
 \begin{equation}
-\min_{\phi}\; \mathbb{E}_{(c,\mathcal{D}_c)\sim\mathcal{D}}\; \mathbb{E}_{(x,y)\sim\mathcal{D}_c}\; \mathrm{KL}\big(p_\theta(y|x,c)\,\|\,p_{\theta+H_\phi(c)}(y|x)\big).
+\begin{aligned}
+\min_{\phi}\;\; &\mathbb{E}_{(c,\mathcal{D}_c)\sim\mathcal{D}}\; \mathbb{E}_{(x,y)\sim\mathcal{D}_c} \\[2pt]
+&\mathrm{KL}\big(p_\theta(y|x,c)\,\|\,p_{\theta+H_\phi(c)}(y|x)\big).
+\end{aligned}
 \label{eq:meta}
 \end{equation}
 
@@ -204,9 +207,16 @@ text-RAG & 6/6 & 119.3 & (no weight-inj.) \\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/scaling.png}
-\caption{Repeated compaction scales recall past \DTL{}'s single-encode limit. \emph{Left:} recall vs.\ conversation length. \emph{Right:} query-time context (log scale), \naplora{} vs.\ text-RAG. \mt{scripts/scaling\_sweep.py}.}
+\includegraphics[width=\columnwidth]{figures/scaling_1.png}
+\caption{Repeated compaction scales recall past \DTL{}'s single-encode limit: recall vs.\ conversation length. \mt{scripts/scaling\_sweep.py}.}
 \label{fig:scaling}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/scaling_2.png}
+\caption{Query-time context (log scale), \naplora{} vs.\ the text-RAG ablation, for the same growing conversation as Figure~\ref{fig:scaling}. \mt{scripts/scaling\_sweep.py}.}
+\label{fig:scalingcost}
 \end{figure}
 
 \subsection{Statistical validation at scale}
@@ -216,9 +226,16 @@ The scenarios above are illustrative; we additionally ran a fully randomized eva
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/large_scale.png}
-\caption{Statistical validation: $5$ seeds $\times$ $20$ facts $\times$ $5$ sizes ($n{=}100$/cell), mean $\pm$ std, Wilson 95\% CIs. \mt{scripts/large\_scale\_eval.py}.}
+\includegraphics[width=\columnwidth]{figures/large_scale_1.png}
+\caption{Statistical validation -- recall, mean $\pm$ std over $5$ seeds $\times$ $20$ facts $\times$ $5$ haystack sizes ($n{=}100$/cell). \mt{scripts/large\_scale\_eval.py}.}
 \label{fig:largescale}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/large_scale_2.png}
+\caption{Query-time context (log scale) for the same sweep as Figure~\ref{fig:largescale}, including the trained Cartridges baseline (\S\ref{sec:cartridges}). \mt{scripts/large\_scale\_eval.py}.}
+\label{fig:largescalecost}
 \end{figure}
 
 \subsection{Head-to-head against a trained Cartridges baseline}

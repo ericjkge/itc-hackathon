@@ -69,11 +69,11 @@ script-generated JSON file in the parent repository, not hand-transcribed:
 |---|---|
 | Curated memory demo (17/18, 16/18, 0/18) | `results/memory_demo.json` |
 | Ablation ladder (Table 1) | `results/ablations.json`, `scripts/ablation_study.py` |
-| Scaling sweep (Figure 2, Appendix B) | `results/scaling.json`, `scripts/scaling_sweep.py` |
-| Statistical validation (Figure 3, Appendix A) | `results/large_scale.json`, `scripts/large_scale_eval.py` |
+| Scaling sweep (Figures 2-3, Appendix B) | `results/scaling.json`, `scripts/scaling_sweep.py` |
+| Statistical validation (Figures 4-5, Appendix A) | `results/large_scale.json`, `scripts/large_scale_eval.py` |
 | Cartridges reimplementation | `results/cartridge.json`, `scripts/cartridge_eval.py` |
-| Cost model (Figure 4, Table 2) | `results/cost.json`, `scripts/cost_model.py` |
-| Physics skill acquisition (Figure 5) | `skill-acquisition/physics_benchmark_results.json` |
+| Cost model (Figure 6, Table 2) | `results/cost.json`, `scripts/cost_model.py` |
+| Physics skill acquisition (Figure 7) | `skill-acquisition/physics_benchmark_results.json` |
 | Personalization transcript | `src/agenthn/webapp/static/fixtures/personalization.json` |
-| Self-improvement trajectory (Figure 6) | `src/agenthn/webapp/static/fixtures/skills_product.json` |
+| Self-improvement trajectory (Figure 8) | `src/agenthn/webapp/static/fixtures/skills_product.json` |
 | Skill router / debugging-skill examples | `src/agenthn/webapp/static/fixtures/skills_router.json`, `task1-part1/outputs/systematic-debugging.result.json` |
